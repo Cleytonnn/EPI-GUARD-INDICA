@@ -1,0 +1,114 @@
+# ============================================
+# Configuração de Câmeras via API
+# ============================================
+# Configure aqui as câmeras do sistema da empresa.
+# O sistema vai buscar snapshots periodicamente em cada câmera.
+#
+# Tipos de autenticação suportados:
+#   none    - Sem autenticação
+#   basic   - HTTP Basic Auth (usuário:senha)
+#   digest  - HTTP Digest Auth (Hikvision usa este)
+#   bearer  - Token Bearer (Authorization: Bearer <token>)
+#   api_key - API Key em header customizado
+
+cameras:
+
+  # =============================================
+  # EXEMPLO 1: API genérica (retorna imagem JPEG)
+  # =============================================
+  - camera_id: "cam_entrada_01"
+    name: "Entrada Principal"
+    url: "http://192.168.1.100/api/snapshot"
+    method: GET
+    auth_type: "bearer"
+    token: "seu_token_aqui"
+    interval: 2.0          # Buscar a cada 2 segundos
+    timeout: 10
+    enabled: true
+
+  # =============================================
+  # EXEMPLO 2: API que retorna JSON com Base64
+  # =============================================
+  # Se a API retorna algo como:
+  # {"camera": "cam01", "image": "data:image/jpeg;base64,/9j/4AAQ..."}
+  - camera_id: "cam_galpao_01"
+    name: "Galpão Industrial"
+    url: "https://api.empresa.com/cameras/cam01/snapshot"
+    method: GET
+    auth_type: "api_key"
+    token: "chave-api-da-empresa"
+    api_key_header: "X-API-Key"     # Nome do header
+    image_field: "image"            # Campo JSON que contém a imagem
+    interval: 3.0
+    enabled: true
+
+  # =============================================
+  # EXEMPLO 3: Hikvision ISAPI
+  # =============================================
+  - camera_id: "cam_hikvision_01"
+    name: "Câmera Hikvision 01"
+    url: "http://192.168.1.64/ISAPI/Streaming/channels/101/picture"
+    method: GET
+    auth_type: "digest"            # Hikvision usa Digest Auth
+    username: "admin"
+    password: "senha_da_camera"
+    interval: 2.0
+    enabled: false                 # Desabilitada (mude para true)
+
+  # =============================================
+  # EXEMPLO 4: Intelbras
+  # =============================================
+  - camera_id: "cam_intelbras_01"
+    name: "Câmera Intelbras 01"
+    url: "http://192.168.1.108/cgi-bin/snapshot.cgi?channel=1"
+    method: GET
+    auth_type: "digest"
+    username: "admin"
+    password: "senha_da_camera"
+    interval: 2.0
+    enabled: false
+
+  # =============================================
+  # EXEMPLO 5: API com POST (envia parâmetros)
+  # =============================================
+  - camera_id: "cam_post_01"
+    name: "Sistema VMS"
+    url: "https://vms.empresa.com/api/v1/cameras/snapshot"
+    method: POST
+    auth_type: "bearer"
+    token: "jwt_token_aqui"
+    body:
+      camera_id: "CAM-001"
+      resolution: "1080p"
+      format: "jpeg"
+    headers:
+      Content-Type: "application/json"
+    image_field: "data.snapshot"    # Acessa data.snapshot no JSON
+    interval: 2.0
+    enabled: false
+
+  # =============================================
+  # EXEMPLO 6: ONVIF Snapshot
+  # =============================================
+  - camera_id: "cam_onvif_01"
+    name: "Câmera ONVIF"
+    url: "http://192.168.1.200/onvif-http/snapshot?Profile_1"
+    method: GET
+    auth_type: "basic"
+    username: "admin"
+    password: "senha"
+    interval: 2.0
+    enabled: false
+
+  # =============================================
+  # EXEMPLO 7: Dahua
+  # =============================================
+  - camera_id: "cam_dahua_01"
+    name: "Câmera Dahua 01"
+    url: "http://192.168.1.110/cgi-bin/snapshot.cgi?channel=0"
+    method: GET
+    auth_type: "digest"
+    username: "admin"
+    password: "senha_da_camera"
+    interval: 2.0
+    enabled: false

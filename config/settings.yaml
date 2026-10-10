@@ -1,0 +1,65 @@
+# ============================================
+# Configurações do Sistema de Detecção de EPI
+# ============================================
+
+# --- Câmera / Fonte de Vídeo ---
+camera:
+  source: 0                # 0 = webcam padrão, "rtsp://..." para câmera IP, "video.mp4" para arquivo
+  width: 1280
+  height: 720
+  fps: 30
+  reconnect_delay: 5       # Segundos para tentar reconectar se perder conexão
+
+# --- Modelo de Detecção ---
+detection:
+  model_path: "models/best.pt"  # Modelo treinado para detecção de EPI
+  confidence: 0.20              # Threshold de confiança mínima (0.20 ideal para cabines veiculares e canteiro)
+  iou_threshold: 0.45        # Threshold de IoU para NMS
+  skip_frames: 2             # Processar a cada N frames (1 = todos)
+  track: true                # Habilitar tracking de objetos (ByteTrack)
+  imgsz: 640                 # Tamanho da imagem para inferência
+
+# --- Regras de Conformidade ---
+compliance:
+  min_violation_frames: 3    # Frames consecutivos para confirmar uma violação (ideal para 15-30 FPS)
+  required_ppe:              # Lista de EPIs obrigatórios a verificar
+    - helmet
+    - gloves
+    - goggles
+    - vest
+    - boots
+  violation_classes:          # Classes que indicam AUSÊNCIA de EPI
+    - no_helmet
+    - no_gloves
+    - no_boots
+    - no_goggle
+
+# --- Sistema de Alertas ---
+alerts:
+  save_images: true          # Salvar imagens de violações localmente
+  save_dir: "alertas"        # Pasta para salvar imagens
+  send_email: false          # Enviar alertas por email (configure o .env primeiro)
+  cooldown_seconds: 60       # Intervalo mínimo entre alertas do mesmo tipo/pessoa
+  image_quality: 85          # Qualidade JPEG das imagens salvas (1-100)
+
+# --- Exibição ---
+display:
+  show_window: true          # Mostrar janela com vídeo anotado
+  bbox_thickness: 2          # Espessura das caixas delimitadoras
+
+# --- Processamento de Gravações MP4 (Placa > Data > Vídeo) ---
+video_batch:
+  input_dir: "gravacoes"     # Pasta raiz das gravações
+  file_extensions:           # Extensões suportadas (.265 nativo, .mp4, etc.)
+    - ".265"
+    - ".h265"
+    - ".hevc"
+    - ".mp4"
+    - ".avi"
+    - ".mkv"
+  skip_frames: 3             # Analisar a cada N frames (aumenta velocidade)
+  report_csv: "relatorio_infracoes.csv"  # Relatório consolidado de infrações
+  processed_db: "videos_processados.json" # Controle de vídeos já analisados
+  watch_interval: 30         # Segundos entre checagens no modo contínuo (--watch)
+
+

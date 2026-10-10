@@ -1,0 +1,62 @@
+# ============================================
+# Git Ignore - Sistema de Detecção de EPI
+# ============================================
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# Arquivos compilados e caches Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Variáveis de ambiente e credenciais
+.env
+.env.local
+*.pem
+*.key
+
+# Datasets e Treinamento pesado
+datasets/
+runs/
+weights/
+*.pt
+!models/best.pt
+*.onnx
+*.engine
+
+# Evidências e relatórios gerados em runtime
+alertas/*
+!alertas/.gitkeep
+videos_processados.json
+relatorio_infracoes.csv
+
+# Gravações de teste pesadas
+gravacoes/*
+!gravacoes/.gitkeep
+!gravacoes/ABC1D23/
+!gravacoes/BRA2E19/
+*.265
+*.hevc
+*.h265
+
+# IDEs e Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Distribuição / Build
+dist/
+build/
+*.egg-info/
