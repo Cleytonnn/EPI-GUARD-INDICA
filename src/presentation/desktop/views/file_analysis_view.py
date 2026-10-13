@@ -61,7 +61,7 @@ class FileAnalysisView(ctk.CTkFrame):
 
         title = ctk.CTkLabel(
             header_frame,
-            text="🎬 Análise Direta de Gravação (.mp4 / .265)",
+            text="🎬 Análise Direta de Gravação",
             font=FONT_TITLE,
             text_color=TEXT_PRIMARY,
         )

@@ -14,6 +14,14 @@ import logging
 import sys
 from pathlib import Path
 
+# Configura encoding UTF-8 para evitar erros de emoji no terminal Windows
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-7s | %(message)s",
@@ -23,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def train_ultralytics(
+    data: str = "construction-ppe.yaml",
     model_name: str = "yolo11n.pt",
     epochs: int = 100,
     imgsz: int = 640,
@@ -63,10 +72,10 @@ def train_ultralytics(
     logger.info(f"📥 Carregando modelo base: {model_name}")
     model = YOLO(model_name)
 
-    # Treinar com dataset Construction-PPE (built-in na Ultralytics)
-    logger.info("🚀 Iniciando treinamento...")
+    # Treinar modelo YOLO
+    logger.info(f"🚀 Iniciando treinamento com dataset: {data}...")
     results = model.train(
-        data="construction-ppe.yaml",
+        data=data,
         epochs=epochs,
         imgsz=imgsz,
         batch=batch,
@@ -222,6 +231,7 @@ Exemplos:
   python scripts/train_model.py --dataset roboflow --api-key CHAVE --workspace ws --project proj
         """,
     )
+    parser.add_argument("--data", default=None, help="Caminho do arquivo YAML do dataset customizado (ex: datasets/custom_ppe/data.yaml)")
     parser.add_argument("--model", default="yolo11n.pt", help="Modelo base (default: yolo11n.pt)")
     parser.add_argument("--epochs", type=int, default=100, help="Número de épocas (default: 100)")
     parser.add_argument("--imgsz", type=int, default=640, help="Tamanho da imagem (default: 640)")
@@ -275,7 +285,9 @@ def main():
             device=args.device,
         )
     else:
+        dataset_yaml = args.data if args.data else "construction-ppe.yaml"
         train_ultralytics(
+            data=dataset_yaml,
             model_name=args.model,
             epochs=args.epochs,
             imgsz=args.imgsz,

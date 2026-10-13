@@ -25,6 +25,7 @@ htmlcov/
 
 # Datasets e Treinamento pesado
 datasets/
+!datasets/custom_ppe_template.yaml
 runs/
 weights/
 *.pt

@@ -25,18 +25,49 @@ class ComplianceService:
         required_ppe: Optional[List[str]] = None,
         violation_classes: Optional[List[str]] = None,
         min_violation_frames: int = 5,
+        infer_missing_ppe: bool = True,
     ):
         self.required_ppe = set(required_ppe or ["helmet", "gloves", "goggles", "vest", "boots"])
         self.violation_classes = set(violation_classes or [
             "no_helmet", "no_gloves", "no_boots", "no_goggle", "no_vest"
         ])
         self.min_violation_frames = max(1, min_violation_frames)
+        self.infer_missing_ppe = infer_missing_ppe
 
         self._violation_counter: Dict[tuple, int] = defaultdict(int)
         self._confidence_sum: Dict[tuple, float] = defaultdict(float)
         self._last_bbox: Dict[tuple, tuple] = {}
         self._current_frame_keys: Set[tuple] = set()
         self._confirmed_violations: Set[tuple] = set()
+
+    def _is_ppe_on_person(self, person_bbox: tuple, ppe_bbox: tuple, ppe_type: str = "helmet") -> bool:
+        """Verifica se o EPI está na região anatômica correspondente da pessoa."""
+        px1, py1, px2, py2 = person_bbox
+        height = max(1, py2 - py1)
+        hx1, hy1, hx2, hy2 = ppe_bbox
+        hcx = (hx1 + hx2) / 2
+        hcy = (hy1 + hy2) / 2
+
+        # Tolerância horizontal (mãos e membros podem estender-se levemente além do tronco)
+        margin_x = max(35, int(0.25 * (px2 - px1)))
+        if not (px1 - margin_x <= hcx <= px2 + margin_x):
+            return False
+
+        if ppe_type in {"helmet", "no_helmet"}:
+            head_y2 = py1 + int(height * 0.50)
+            return (py1 - 30 <= hcy <= head_y2 + 25)
+        elif ppe_type in {"vest", "no_vest"}:
+            torso_y1 = py1 + int(height * 0.15)
+            torso_y2 = py1 + int(height * 0.75)
+            return (torso_y1 - 25 <= hcy <= torso_y2 + 25)
+        elif ppe_type in {"gloves", "no_gloves"}:
+            hands_y1 = py1 + int(height * 0.30)
+            return (hands_y1 - 30 <= hcy <= py2 + 30)
+        elif ppe_type in {"boots", "no_boots"}:
+            feet_y1 = py1 + int(height * 0.65)
+            return (feet_y1 - 30 <= hcy <= py2 + 40)
+        else:
+            return (py1 - 30 <= hcy <= py2 + 30)
 
     def check(
         self,
@@ -49,10 +80,74 @@ class ComplianceService:
             self._decay_counters()
             return []
 
+        active_detections = list(detections)
+
+        # Regra de Conformidade: Pessoa detectada sem EPI obrigatório
+        if self.infer_missing_ppe:
+            persons = [d for d in detections if d.class_name == "Person"]
+
+            # 1. Capacete (Helmet)
+            if "helmet" in self.required_ppe:
+                helmets = [d for d in detections if d.class_name == "helmet"]
+                direct_no_helmets = [d for d in detections if d.class_name == "no_helmet"]
+                for person in persons:
+                    has_helmet = any(self._is_ppe_on_person(person.bbox, h.bbox, "helmet") for h in helmets)
+                    has_direct_no = any(self._is_ppe_on_person(person.bbox, nh.bbox, "no_helmet") for nh in direct_no_helmets)
+
+                    if not has_helmet and not has_direct_no:
+                        px1, py1, px2, py2 = person.bbox
+                        head_y2 = py1 + max(int((py2 - py1) * 0.45), 20)
+                        active_detections.append(Detection(
+                            class_name="no_helmet",
+                            confidence=round(person.confidence * 0.85, 3),
+                            bbox=(px1, py1, px2, head_y2),
+                            track_id=person.track_id,
+                        ))
+
+            # 2. Luvas (Gloves)
+            if "gloves" in self.required_ppe:
+                gloves = [d for d in detections if d.class_name == "gloves"]
+                direct_no_gloves = [d for d in detections if d.class_name == "no_gloves"]
+                for person in persons:
+                    has_gloves = any(self._is_ppe_on_person(person.bbox, g.bbox, "gloves") for g in gloves)
+                    has_direct_no = any(self._is_ppe_on_person(person.bbox, ng.bbox, "no_gloves") for ng in direct_no_gloves)
+
+                    if not has_gloves and not has_direct_no:
+                        px1, py1, px2, py2 = person.bbox
+                        h = py2 - py1
+                        hands_y1 = py1 + int(h * 0.40)
+                        hands_y2 = min(py2, py1 + int(h * 0.90))
+                        active_detections.append(Detection(
+                            class_name="no_gloves",
+                            confidence=round(person.confidence * 0.80, 3),
+                            bbox=(px1, hands_y1, px2, hands_y2),
+                            track_id=person.track_id,
+                        ))
+
+            # 3. Colete (Vest)
+            if "vest" in self.required_ppe:
+                vests = [d for d in detections if d.class_name == "vest"]
+                direct_no_vests = [d for d in detections if d.class_name == "no_vest"]
+                for person in persons:
+                    has_vest = any(self._is_ppe_on_person(person.bbox, v.bbox, "vest") for v in vests)
+                    has_direct_no = any(self._is_ppe_on_person(person.bbox, nv.bbox, "no_vest") for nv in direct_no_vests)
+
+                    if not has_vest and not has_direct_no:
+                        px1, py1, px2, py2 = person.bbox
+                        h = py2 - py1
+                        torso_y1 = py1 + int(h * 0.15)
+                        torso_y2 = py1 + int(h * 0.70)
+                        active_detections.append(Detection(
+                            class_name="no_vest",
+                            confidence=round(person.confidence * 0.85, 3),
+                            bbox=(px1, torso_y1, px2, torso_y2),
+                            track_id=person.track_id,
+                        ))
+
         confirmed: List[Violation] = []
         self._current_frame_keys.clear()
 
-        for det in detections:
+        for det in active_detections:
             if det.class_name not in self.violation_classes:
                 continue
 
