@@ -29,7 +29,7 @@ class ComplianceService:
     ):
         self.required_ppe = set(required_ppe or ["helmet", "gloves", "goggles", "vest", "boots"])
         self.violation_classes = set(violation_classes or [
-            "no_helmet", "no_gloves", "no_boots", "no_goggle", "no_vest"
+            "no_helmet", "no_gloves", "no_boots", "no_goggle", "no_vest", "no_uniform_rf"
         ])
         self.min_violation_frames = max(1, min_violation_frames)
         self.infer_missing_ppe = infer_missing_ppe
@@ -56,7 +56,7 @@ class ComplianceService:
         if ppe_type in {"helmet", "no_helmet"}:
             head_y2 = py1 + int(height * 0.50)
             return (py1 - 30 <= hcy <= head_y2 + 25)
-        elif ppe_type in {"vest", "no_vest"}:
+        elif ppe_type in {"vest", "no_vest", "uniform_rf", "no_uniform_rf"}:
             torso_y1 = py1 + int(height * 0.15)
             torso_y2 = py1 + int(height * 0.75)
             return (torso_y1 - 25 <= hcy <= torso_y2 + 25)
@@ -139,6 +139,26 @@ class ComplianceService:
                         torso_y2 = py1 + int(h * 0.70)
                         active_detections.append(Detection(
                             class_name="no_vest",
+                            confidence=round(person.confidence * 0.85, 3),
+                            bbox=(px1, torso_y1, px2, torso_y2),
+                            track_id=person.track_id,
+                        ))
+
+            # 4. Uniforme RF (Uniforme Risco Fogo NR-10)
+            if "uniform_rf" in self.required_ppe:
+                uniforms = [d for d in detections if d.class_name == "uniform_rf"]
+                direct_no_uniforms = [d for d in detections if d.class_name == "no_uniform_rf"]
+                for person in persons:
+                    has_uniform = any(self._is_ppe_on_person(person.bbox, u.bbox, "uniform_rf") for u in uniforms)
+                    has_direct_no = any(self._is_ppe_on_person(person.bbox, nu.bbox, "no_uniform_rf") for nu in direct_no_uniforms)
+
+                    if not has_uniform and not has_direct_no:
+                        px1, py1, px2, py2 = person.bbox
+                        h = py2 - py1
+                        torso_y1 = py1 + int(h * 0.15)
+                        torso_y2 = min(py2, py1 + int(h * 0.85))
+                        active_detections.append(Detection(
+                            class_name="no_uniform_rf",
                             confidence=round(person.confidence * 0.85, 3),
                             bbox=(px1, torso_y1, px2, torso_y2),
                             track_id=person.track_id,

@@ -80,3 +80,24 @@ def test_compliance_service_infers_missing_gloves_on_person():
     v_with_gloves = service.check([person, gloves])
     assert len(v_with_gloves) == 0
 
+
+def test_compliance_service_infers_missing_uniform_rf_on_person():
+    """Garante que uma Pessoa sem uniforme RF gere alerta de 'no_uniform_rf' quando uniform_rf for obrigatorio."""
+    service = ComplianceService(required_ppe=["uniform_rf"], min_violation_frames=2, infer_missing_ppe=True)
+    person = Detection(class_name="Person", confidence=0.85, bbox=(100, 100, 300, 500), track_id=30)
+
+    # Frame 1: pessoa sem uniforme RF
+    assert len(service.check([person])) == 0
+
+    # Frame 2: confirmação de ausência de uniforme RF
+    v = service.check([person])
+    assert len(v) == 1
+    assert v[0].violation_type == "no_uniform_rf"
+    assert "Sem Uniforme RF" in v[0].description
+
+    # Se a pessoa estiver de uniforme RF no corpo, não deve gerar violação
+    service.reset()
+    uniform = Detection(class_name="uniform_rf", confidence=0.9, bbox=(110, 150, 290, 420), track_id=31)
+    assert len(service.check([person, uniform])) == 0
+
+

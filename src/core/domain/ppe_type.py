@@ -8,6 +8,7 @@ class PPEClass(str, Enum):
     HELMET = "helmet"
     GLOVES = "gloves"
     VEST = "vest"
+    UNIFORM_RF = "uniform_rf"
     BOOTS = "boots"
     GOGGLES = "goggles"
     PERSON = "Person"
@@ -19,6 +20,7 @@ class PPEClass(str, Enum):
             self.HELMET: "Capacete ✅",
             self.GLOVES: "Luvas ✅",
             self.VEST: "Colete ✅",
+            self.UNIFORM_RF: "Uniforme RF ✅",
             self.BOOTS: "Botas ✅",
             self.GOGGLES: "Óculos ✅",
             self.PERSON: "Pessoa",
@@ -34,6 +36,7 @@ class ViolationClass(str, Enum):
     NO_BOOTS = "no_boots"
     NO_GOGGLE = "no_goggle"
     NO_VEST = "no_vest"
+    NO_UNIFORM_RF = "no_uniform_rf"
 
     @property
     def label_pt(self) -> str:
@@ -43,6 +46,7 @@ class ViolationClass(str, Enum):
             self.NO_BOOTS: "Sem Botas 🔴",
             self.NO_GOGGLE: "Sem Óculos de Proteção 🔴",
             self.NO_VEST: "Sem Colete 🔴",
+            self.NO_UNIFORM_RF: "Sem Uniforme RF 🔴",
         }
         return translations.get(self, str(self.value))
 
@@ -54,5 +58,6 @@ class ViolationClass(str, Enum):
             self.NO_BOOTS: "boots",
             self.NO_GOGGLE: "goggles",
             self.NO_VEST: "vest",
+            self.NO_UNIFORM_RF: "uniform_rf",
         }
         return mapping.get(self, "desconhecido")
