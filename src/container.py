@@ -16,6 +16,7 @@ from src.core.use_cases.watch_directory import WatchDirectoryUseCase
 from src.core.use_cases.analyze_frame import AnalyzeFrameUseCase
 from src.core.use_cases.process_stream import ProcessLiveStreamUseCase
 from src.infrastructure.ai.yolo_detector import YOLODetector
+from src.infrastructure.ai.pose_detector import PoseEPIDetector
 from src.infrastructure.storage.file_alert_storage import FileAlertStorage
 from src.infrastructure.notifications.email_notifier import EmailNotifier
 from src.infrastructure.notifications.composite_notifier import CompositeNotifier
@@ -32,14 +33,28 @@ class Container:
     def __init__(self, settings: Optional[AppSettings] = None):
         self.settings = settings or AppSettings.load()
 
-        # 1. Infraestrutura - Detector de IA
-        self.detector = YOLODetector(
-            model_path=self.settings.detection.model_path,
-            confidence=self.settings.detection.confidence,
-            iou_threshold=self.settings.detection.iou_threshold,
-            imgsz=self.settings.detection.imgsz,
-            track=self.settings.detection.track,
-        )
+        # 1. Infraestrutura - Detector de IA (Pose ou YOLO BBox)
+        backend = getattr(self.settings.detection, "backend", "pose")
+        if backend == "pose":
+            model_file = self.settings.detection.model_path
+            # Se o model_path for o padrão legado de bbox, usa o modelo de pose
+            if "best.pt" in model_file:
+                model_file = "yolov8n-pose.pt"
+            self.detector = PoseEPIDetector(
+                model_path=model_file,
+                confidence=self.settings.detection.confidence,
+                iou_threshold=self.settings.detection.iou_threshold,
+                imgsz=self.settings.detection.imgsz,
+                track=self.settings.detection.track,
+            )
+        else:
+            self.detector = YOLODetector(
+                model_path=self.settings.detection.model_path,
+                confidence=self.settings.detection.confidence,
+                iou_threshold=self.settings.detection.iou_threshold,
+                imgsz=self.settings.detection.imgsz,
+                track=self.settings.detection.track,
+            )
 
         # 2. Infraestrutura - Armazenamento de Imagens
         self.alert_storage = FileAlertStorage(

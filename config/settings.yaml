@@ -12,8 +12,9 @@ camera:
 
 # --- Modelo de Detecção ---
 detection:
-  model_path: "models/best.pt"  # Modelo treinado para detecção de EPI
-  confidence: 0.20              # Threshold de confiança mínima (0.20 ideal para cabines veiculares e canteiro)
+  backend: "pose"               # "pose" (YOLO-Pose anatômico para uniforme RF, luvas e capacete) ou "yolo"
+  model_path: "yolov8n-pose.pt" # yolov8n-pose.pt para Pose ou models/best.pt para legado
+  confidence: 0.20              # Threshold de confiança mínima
   iou_threshold: 0.45        # Threshold de IoU para NMS
   skip_frames: 2             # Processar a cada N frames (1 = todos)
   track: true                # Habilitar tracking de objetos (ByteTrack)
@@ -25,14 +26,13 @@ compliance:
   required_ppe:              # Lista de EPIs obrigatórios a verificar
     - helmet
     - gloves
-    - goggles
+    - uniform_rf
     - vest
-    - boots
   violation_classes:          # Classes que indicam AUSÊNCIA de EPI
     - no_helmet
     - no_gloves
-    - no_boots
-    - no_goggle
+    - no_uniform_rf
+    - no_vest
 
 # --- Sistema de Alertas ---
 alerts:

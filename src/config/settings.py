@@ -29,9 +29,10 @@ class CameraConfig:
 
 @dataclass
 class DetectionConfig:
-    """Configurações do modelo de detecção YOLO."""
-    model_path: str = "models/best.pt"
-    confidence: float = 0.4
+    """Configurações do modelo de detecção de EPI."""
+    backend: str = "pose"  # "pose" (YOLO-Pose anatômico) ou "yolo" (bounding box padrão)
+    model_path: str = "yolov8n-pose.pt"
+    confidence: float = 0.25
     iou_threshold: float = 0.45
     skip_frames: int = 2
     track: bool = True
