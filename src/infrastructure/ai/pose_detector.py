@@ -51,6 +51,8 @@ class PoseEPIDetector(IDetector):
         helmet_threshold: float = 0.22,
         uniform_rf_threshold: float = 0.12,
         gloves_skin_threshold: float = 0.35,
+        only_company_workers: bool = True,
+        is_cabin: bool = False,
     ):
         self.model_path = str(model_path)
         self._confidence = float(confidence)
@@ -62,6 +64,8 @@ class PoseEPIDetector(IDetector):
         self.helmet_threshold = helmet_threshold
         self.uniform_rf_threshold = uniform_rf_threshold
         self.gloves_skin_threshold = gloves_skin_threshold
+        self.only_company_workers = bool(only_company_workers)
+        self.is_cabin = bool(is_cabin)
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._load_model()
@@ -414,7 +418,48 @@ class PoseEPIDetector(IDetector):
                 track_id = int(track_ids[i]) if track_ids[i] is not None else -1
                 conf = round(float(confs[i]), 3)
 
-                # 1. Registro da Pessoa
+                if kps is None:
+                    if self.only_company_workers:
+                        detections.append(Detection(
+                            class_name="civil",
+                            confidence=conf,
+                            bbox=(x1, y1, x2, y2),
+                            track_id=track_id,
+                        ))
+                    else:
+                        detections.append(Detection(
+                            class_name="Person",
+                            confidence=conf,
+                            bbox=(x1, y1, x2, y2),
+                            track_id=track_id,
+                        ))
+                    continue
+
+                sl = self._get_keypoint(kps, SHOULDER_L)
+                sr = self._get_keypoint(kps, SHOULDER_R)
+                shoulder_w = abs(sr[0] - sl[0]) if (sl and sr) else int(box_w * 0.5)
+
+                # Análise das características de EPI
+                has_uniform, uniform_score, torso_box = self._analyze_uniform_rf(frame, (x1, y1, x2, y2), kps)
+                has_helmet, helmet_score, head_box = self._analyze_helmet(frame, (x1, y1, x2, y2), kps)
+
+                # Avaliação de contexto de cabine (motorista em close-up)
+                is_cabin_person = self.is_cabin or ((box_h / float(frame_h)) > 0.40 and (y2 >= frame_h * 0.85))
+
+                # Critério de Funcionário da Empresa vs Pedestre/Civil na rua
+                is_company_worker = has_uniform or has_helmet or is_cabin_person
+
+                # Se for civil na rua (sem uniforme RF e sem capacete): NÃO audita nem gera infração!
+                if self.only_company_workers and not is_company_worker:
+                    detections.append(Detection(
+                        class_name="civil",
+                        confidence=conf,
+                        bbox=(x1, y1, x2, y2),
+                        track_id=track_id,
+                    ))
+                    continue
+
+                # 1. Registro do Trabalhador da Empresa
                 detections.append(Detection(
                     class_name="Person",
                     confidence=conf,
@@ -422,15 +467,7 @@ class PoseEPIDetector(IDetector):
                     track_id=track_id,
                 ))
 
-                if kps is None:
-                    continue
-
-                sl = self._get_keypoint(kps, SHOULDER_L)
-                sr = self._get_keypoint(kps, SHOULDER_R)
-                shoulder_w = abs(sr[0] - sl[0]) if (sl and sr) else int(box_w * 0.5)
-
                 # 2. Avaliação de Capacete
-                has_helmet, helmet_score, head_box = self._analyze_helmet(frame, (x1, y1, x2, y2), kps)
                 if has_helmet:
                     detections.append(Detection(
                         class_name="helmet",
@@ -447,7 +484,6 @@ class PoseEPIDetector(IDetector):
                     ))
 
                 # 3. Avaliação de Uniforme RF (e compatibilidade Colete)
-                has_uniform, uniform_score, torso_box = self._analyze_uniform_rf(frame, (x1, y1, x2, y2), kps)
                 if has_uniform:
                     detections.append(Detection(
                         class_name="uniform_rf",
@@ -462,6 +498,7 @@ class PoseEPIDetector(IDetector):
                         track_id=track_id,
                     ))
                 else:
+                    # Trabalhador descaracterizado (em cabine ou no canteiro)
                     detections.append(Detection(
                         class_name="no_uniform_rf",
                         confidence=0.85,

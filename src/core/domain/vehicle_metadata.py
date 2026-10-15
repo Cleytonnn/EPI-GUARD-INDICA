@@ -87,3 +87,10 @@ class VehicleMetadata:
             video_second=seconds,
             frame_index=frame_idx,
         )
+
+    @property
+    def is_cabin(self) -> bool:
+        """Determina se a gravação é proveniente de câmera interna de cabine (CH2, DMS, etc.)."""
+        name_upper = self.video_name.upper()
+        return any(tag in name_upper for tag in ("CH2", "CABINE", "DMS", "INTERN", "MOTORISTA"))
+

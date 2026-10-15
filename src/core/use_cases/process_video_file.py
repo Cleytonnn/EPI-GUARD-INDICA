@@ -104,6 +104,8 @@ class ProcessVideoFileUseCase:
         # Resetar estados para o novo vídeo
         self.compliance_service.reset()
         self.detector.reset_tracking()
+        if hasattr(self.detector, "is_cabin"):
+            self.detector.is_cabin = bool(metadata.is_cabin)
 
         frame_idx = 0
         violations_found: List[Dict[str, Any]] = []

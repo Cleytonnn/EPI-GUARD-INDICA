@@ -419,6 +419,12 @@ class FileAnalysisView(ctk.CTkFrame):
                 video_name=Path(video_path).name,
             )
 
+            # Configura contexto de cabine veicular e reseta tracking
+            self.container.compliance_service.reset()
+            self.container.detector.reset_tracking()
+            if hasattr(self.container.detector, "is_cabin"):
+                self.container.detector.is_cabin = bool(metadata.is_cabin)
+
             skip_frames = self.container.settings.detection.skip_frames or 2
             consecutive_target = self.container.settings.compliance.min_violation_frames
 

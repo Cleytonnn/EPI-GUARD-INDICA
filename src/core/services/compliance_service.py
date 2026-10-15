@@ -26,6 +26,7 @@ class ComplianceService:
         violation_classes: Optional[List[str]] = None,
         min_violation_frames: int = 5,
         infer_missing_ppe: bool = True,
+        only_company_workers: bool = True,
     ):
         self.required_ppe = set(required_ppe or ["helmet", "gloves", "goggles", "vest", "boots"])
         self.violation_classes = set(violation_classes or [
@@ -33,6 +34,7 @@ class ComplianceService:
         ])
         self.min_violation_frames = max(1, min_violation_frames)
         self.infer_missing_ppe = infer_missing_ppe
+        self.only_company_workers = bool(only_company_workers)
 
         self._violation_counter: Dict[tuple, int] = defaultdict(int)
         self._confidence_sum: Dict[tuple, float] = defaultdict(float)
@@ -81,9 +83,11 @@ class ComplianceService:
             return []
 
         active_detections = list(detections)
+        is_cabin = bool(metadata and getattr(metadata, "is_cabin", False))
 
         # Regra de Conformidade: Pessoa detectada sem EPI obrigatório
         if self.infer_missing_ppe:
+            # Audita apenas trabalhadores ('Person'), ignorando civis/pedestres ('civil')
             persons = [d for d in detections if d.class_name == "Person"]
 
             # 1. Capacete (Helmet)
@@ -167,9 +171,17 @@ class ComplianceService:
         confirmed: List[Violation] = []
         self._current_frame_keys.clear()
 
+        # Identifica civis para descartar qualquer alerta em transeuntes na rua
+        civil_tracks = {d.track_id for d in active_detections if d.class_name == "civil"}
+
         for det in active_detections:
             if det.class_name not in self.violation_classes:
                 continue
+
+            # Se for civil na rua, descarta violação
+            if self.only_company_workers and not is_cabin:
+                if det.track_id in civil_tracks:
+                    continue
 
             key = (det.track_id, det.class_name)
             self._current_frame_keys.add(key)

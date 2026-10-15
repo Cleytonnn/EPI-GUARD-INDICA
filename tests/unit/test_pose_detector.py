@@ -25,3 +25,4 @@ def test_pose_detector_inference_on_blank_image():
     # Em uma imagem toda preta, não deve haver detecções falsas de pessoas
     assert isinstance(detections, list)
     assert len(detections) == 0
+

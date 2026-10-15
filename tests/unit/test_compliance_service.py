@@ -101,3 +101,38 @@ def test_compliance_service_infers_missing_uniform_rf_on_person():
     assert len(service.check([person, uniform])) == 0
 
 
+def test_compliance_service_ignores_civilians_on_street():
+    """Garante que pedestres/civis na rua (sem uniforme RF e sem capacete) NÃO gerem alertas de EPI."""
+    from src.core.domain.vehicle_metadata import VehicleMetadata
+
+    service = ComplianceService(
+        required_ppe=["helmet", "gloves", "uniform_rf"],
+        min_violation_frames=2,
+        infer_missing_ppe=True,
+        only_company_workers=True,
+    )
+    
+    # Metadados de gravação externa de rua (CH1 - dashcam)
+    street_meta = VehicleMetadata(plate="TEST123", record_date="2026-10-14", video_name="CH1_rua.mp4")
+    assert not street_meta.is_cabin
+
+    # Detecção de um civil na calçada (sem uniforme, sem capacete)
+    civil = Detection(class_name="civil", confidence=0.88, bbox=(10, 100, 80, 300), track_id=99)
+
+    # Não deve inferir nem confirmar violações para civis
+    assert len(service.check([civil], metadata=street_meta)) == 0
+    assert len(service.check([civil], metadata=street_meta)) == 0
+
+    # Agora, um trabalhador da empresa de uniforme RF que tirou o capacete:
+    service.reset()
+    worker = Detection(class_name="Person", confidence=0.90, bbox=(200, 100, 350, 450), track_id=101)
+    uniform = Detection(class_name="uniform_rf", confidence=0.85, bbox=(210, 150, 340, 350), track_id=101)
+
+    assert len(service.check([worker, uniform], metadata=street_meta)) == 0
+    # No 2º frame, confirma a violação de ausência de capacete para o funcionário
+    violations = service.check([worker, uniform], metadata=street_meta)
+    assert len(violations) >= 1
+    assert any(v.violation_type == "no_helmet" for v in violations)
+
+
+

@@ -12,6 +12,7 @@ class PPEClass(str, Enum):
     BOOTS = "boots"
     GOGGLES = "goggles"
     PERSON = "Person"
+    CIVIL = "civil"
     NONE = "none"
 
     @property
@@ -24,6 +25,7 @@ class PPEClass(str, Enum):
             self.BOOTS: "Botas ✅",
             self.GOGGLES: "Óculos ✅",
             self.PERSON: "Pessoa",
+            self.CIVIL: "Civil / Pedestre",
             self.NONE: "---",
         }
         return translations.get(self, str(self.value))

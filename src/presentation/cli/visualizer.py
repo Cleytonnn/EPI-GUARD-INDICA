@@ -50,11 +50,13 @@ def draw_detections(
     annotated = frame.copy()
 
     for det in detections:
-        if det.is_violation:
+        if det.class_name == "civil":
+            color = (130, 130, 130)  # Cinza neutro para pedestres/civis na rua
+        elif det.is_violation:
             color = COLOR_RED
         elif det.class_name == "Person":
             color = COLOR_BLUE
-        elif det.class_name in ("helmet", "gloves", "vest", "boots", "goggles"):
+        elif det.class_name in ("helmet", "gloves", "vest", "boots", "goggles", "uniform_rf"):
             color = COLOR_GREEN
         else:
             color = COLOR_YELLOW
