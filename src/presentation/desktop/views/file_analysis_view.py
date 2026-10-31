@@ -189,6 +189,19 @@ class FileAnalysisView(ctk.CTkFrame):
         )
         self.stop_btn.pack(side="left", padx=(5, 0))
 
+        # Botão para reproduzir diretamente no VLC Media Player nativo
+        self.vlc_btn = ctk.CTkButton(
+            actions_frame,
+            text="🎬 VLC",
+            font=FONT_BODY_BOLD,
+            fg_color="#ea580c",
+            hover_color="#c2410c",
+            width=70,
+            height=32,
+            command=self._on_open_in_vlc,
+        )
+        self.vlc_btn.pack(side="left", padx=(5, 0))
+
         # 3. Barra de Progresso
         progress_frame = ctk.CTkFrame(self, fg_color="transparent")
         progress_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 5))
@@ -597,3 +610,27 @@ class FileAnalysisView(ctk.CTkFrame):
                 folder = sub
         folder.mkdir(parents=True, exist_ok=True)
         os.startfile(folder)
+
+    def _on_open_in_vlc(self) -> None:
+        """Abre o arquivo de vídeo selecionado no reprodutor VLC com aceleração nativa."""
+        if not self.selected_file or not Path(self.selected_file).exists():
+            self.progress_label.configure(
+                text="⚠️ Por favor, solte ou selecione um arquivo de vídeo primeiro.",
+                text_color=COLOR_WARNING,
+            )
+            return
+
+        from src.infrastructure.video.vlc_service import VLCService
+        if not VLCService.is_available():
+            self.progress_label.configure(
+                text="⚠️ VLC não localizado no sistema. Instale via winget install VideoLAN.VLC",
+                text_color=COLOR_WARNING,
+            )
+            return
+
+        success = VLCService.open_video(self.selected_file)
+        if success:
+            self.progress_label.configure(
+                text="🎬 Vídeo aberto no VLC Media Player com aceleração por hardware.",
+                text_color=COLOR_SUCCESS,
+            )

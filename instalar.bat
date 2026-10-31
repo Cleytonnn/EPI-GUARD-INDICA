@@ -131,14 +131,35 @@ echo [OK] Todas as dependencias foram instaladas com sucesso.
 echo.
 
 :: 6. Baixar modelo base YOLO-Pose se nao existir
-echo [6/6] Verificando modelos neurais de Pose e EPI...
+echo [6/7] Verificando modelos neurais de Pose e EPI...
 if exist "yolov8n-pose.pt" goto MODELO_OK
 echo Baixando modelo base yolov8n-pose.pt...
 python -c "from ultralytics import YOLO; YOLO('yolov8n-pose.pt')"
-goto VALIDACAO
+goto VERIFICAR_VLC
 
 :MODELO_OK
 echo [OK] Modelo yolov8n-pose.pt ja presente no diretorio.
+
+:: 7. Verificar reprodutor VLC Media Player
+:VERIFICAR_VLC
+echo.
+echo [7/7] Verificando VLC Media Player...
+where vlc >nul 2>&1
+if %ERRORLEVEL% EQU 0 goto VLC_OK
+if exist "C:\Program Files\VideoLAN\VLC\vlc.exe" goto VLC_OK
+if exist "C:\Program Files (x86)\VideoLAN\VLC\vlc.exe" goto VLC_OK
+
+where winget >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    echo Instalando VLC Media Player automaticamente via winget...
+    winget install --id VideoLAN.VLC --silent --accept-package-agreements --accept-source-agreements
+) else (
+    echo [AVISO] VLC nao encontrado. Para instalacao manual: https://www.videolan.org/vlc/
+)
+goto VALIDACAO
+
+:VLC_OK
+echo [OK] VLC Media Player instalado e pronto para uso.
 
 :: Validacao final
 :VALIDACAO
