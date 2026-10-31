@@ -62,4 +62,16 @@ video_batch:
   processed_db: "videos_processados.json" # Controle de vídeos já analisados
   watch_interval: 30         # Segundos entre checagens no modo contínuo (--watch)
 
+# --- Aprendizado Ativo (coleta automática de frames para retreino) ---
+active_learning:
+  enabled: true                       # Coletar frames relevantes durante as análises
+  output_dir: "datasets/coleta_ativa" # pendentes/ aprovados/ rejeitados/
+  uncertain_min: 0.30                 # Faixa de confiança considerada "duvidosa"
+  uncertain_max: 0.60
+  random_rate: 0.02                   # 2% de frames aleatórios (evita dataset viciado)
+  min_frame_gap: 30                   # Intervalo mínimo (frames do vídeo) entre coletas
+  max_per_video: 150                  # Limite de amostras por vídeo/câmera
+  max_pending: 5000                   # Para de coletar se houver muitas pendentes de revisão
+  dedup_threshold: 6                  # Distância de hash para considerar frames repetidos
+
 

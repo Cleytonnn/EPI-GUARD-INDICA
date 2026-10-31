@@ -17,6 +17,7 @@ from src.core.interfaces.alert_storage import IAlertStorage
 from src.core.interfaces.report_repo import IViolationReportRepository
 from src.core.interfaces.processed_repo import IProcessedVideosRepository
 from src.core.interfaces.notifier import INotifier
+from src.core.interfaces.training_collector import ITrainingSampleCollector
 from src.core.services.compliance_service import ComplianceService
 from src.presentation.cli.visualizer import draw_detections, draw_vehicle_metadata
 
@@ -49,6 +50,7 @@ class ProcessVideoFileUseCase:
         processed_repo: IProcessedVideosRepository,
         notifier: Optional[INotifier] = None,
         reader_factory: Optional[Callable[[Path | str], IVideoReader]] = None,
+        training_collector: Optional[ITrainingSampleCollector] = None,
     ):
         self.detector = detector
         self.compliance_service = compliance_service
@@ -57,6 +59,7 @@ class ProcessVideoFileUseCase:
         self.processed_repo = processed_repo
         self.notifier = notifier
         self.reader_factory = reader_factory
+        self.training_collector = training_collector
 
     def execute(
         self,
@@ -106,6 +109,8 @@ class ProcessVideoFileUseCase:
         self.detector.reset_tracking()
         if hasattr(self.detector, "is_cabin"):
             self.detector.is_cabin = bool(metadata.is_cabin)
+        if self.training_collector:
+            self.training_collector.start_session(metadata.video_name)
 
         frame_idx = 0
         violations_found: List[Dict[str, Any]] = []
@@ -130,6 +135,10 @@ class ProcessVideoFileUseCase:
 
                 # 2. Avaliação de Conformidade
                 violations = self.compliance_service.check(detections, metadata=current_meta)
+
+                # 2.1 Aprendizado Ativo: guarda frames duvidosos/alertas (frame original, sem anotações)
+                if self.training_collector:
+                    self.training_collector.consider(frame, detections, violations, current_meta)
 
                 # 3. Tratamento de Violações Confirmadas
                 if violations:

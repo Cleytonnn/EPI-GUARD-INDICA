@@ -25,6 +25,7 @@ from src.infrastructure.repositories.json_processed_repo import JsonProcessedVid
 from src.infrastructure.repositories.csv_report_repo import CsvViolationReportRepository
 from src.infrastructure.video.camera_stream import CameraStream
 from src.infrastructure.video.universal_reader import UniversalVideoReader
+from src.infrastructure.training.active_learning_collector import ActiveLearningCollector
 
 
 class Container:
@@ -97,6 +98,20 @@ class Container:
             min_violation_frames=self.settings.compliance.min_violation_frames,
         )
 
+        # 6.1 Aprendizado Ativo - coleta de frames para revisão e retreino
+        al_cfg = self.settings.active_learning
+        self.training_collector = ActiveLearningCollector(
+            output_dir=al_cfg.output_dir,
+            enabled=al_cfg.enabled,
+            uncertain_min=al_cfg.uncertain_min,
+            uncertain_max=al_cfg.uncertain_max,
+            random_rate=al_cfg.random_rate,
+            min_frame_gap=al_cfg.min_frame_gap,
+            max_per_video=al_cfg.max_per_video,
+            max_pending=al_cfg.max_pending,
+            dedup_threshold=al_cfg.dedup_threshold,
+        )
+
         # 7. Casos de Uso
         self.process_video_file_uc = ProcessVideoFileUseCase(
             detector=self.detector,
@@ -106,6 +121,7 @@ class Container:
             processed_repo=self.processed_repo,
             notifier=self.notifier,
             reader_factory=self.video_reader_factory,
+            training_collector=self.training_collector,
         )
 
         self.process_batch_uc = ProcessBatchUseCase(
@@ -128,6 +144,7 @@ class Container:
             compliance_service=self.compliance_service,
             alert_storage=self.alert_storage,
             notifier=self.notifier,
+            training_collector=self.training_collector,
         )
 
     def create_camera_stream(self, source: Optional[int | str] = None) -> CameraStream:

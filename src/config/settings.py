@@ -89,6 +89,20 @@ class VideoBatchConfig:
 
 
 @dataclass
+class ActiveLearningConfig:
+    """Configurações da coleta automática de frames para retreino (Aprendizado Ativo)."""
+    enabled: bool = True
+    output_dir: str = "datasets/coleta_ativa"
+    uncertain_min: float = 0.30
+    uncertain_max: float = 0.60
+    random_rate: float = 0.02
+    min_frame_gap: int = 30
+    max_per_video: int = 150
+    max_pending: int = 5000
+    dedup_threshold: int = 6
+
+
+@dataclass
 class ApiConfig:
     """Configurações da API REST."""
     host: str = "0.0.0.0"
@@ -106,6 +120,7 @@ class AppSettings:
     display: DisplayConfig = field(default_factory=DisplayConfig)
     video_batch: VideoBatchConfig = field(default_factory=VideoBatchConfig)
     api: ApiConfig = field(default_factory=ApiConfig)
+    active_learning: ActiveLearningConfig = field(default_factory=ActiveLearningConfig)
 
     @classmethod
     def load(cls, config_path: Optional[str | Path] = None) -> AppSettings:
@@ -132,6 +147,7 @@ class AppSettings:
         disp_data = raw_data.get("display", {})
         batch_data = raw_data.get("video_batch", {})
         api_data = raw_data.get("api", {})
+        al_data = raw_data.get("active_learning", {}) or {}
 
         alerts_cfg = AlertConfig(
             save_images=alert_data.get("save_images", True),
@@ -154,4 +170,7 @@ class AppSettings:
             display=DisplayConfig(**{k: v for k, v in disp_data.items() if hasattr(DisplayConfig, k)}),
             video_batch=VideoBatchConfig(**{k: v for k, v in batch_data.items() if hasattr(VideoBatchConfig, k)}),
             api=ApiConfig(**{k: v for k, v in api_data.items() if hasattr(ApiConfig, k)}),
+            active_learning=ActiveLearningConfig(
+                **{k: v for k, v in al_data.items() if hasattr(ActiveLearningConfig, k)}
+            ),
         )

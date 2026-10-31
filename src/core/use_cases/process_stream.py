@@ -11,6 +11,7 @@ import numpy as np
 from src.core.interfaces.detector import IDetector
 from src.core.interfaces.alert_storage import IAlertStorage
 from src.core.interfaces.notifier import INotifier
+from src.core.interfaces.training_collector import ITrainingSampleCollector
 from src.core.services.compliance_service import ComplianceService
 from src.infrastructure.video.camera_stream import CameraStream
 from src.presentation.cli.visualizer import (
@@ -32,11 +33,13 @@ class ProcessLiveStreamUseCase:
         compliance_service: ComplianceService,
         alert_storage: IAlertStorage,
         notifier: Optional[INotifier] = None,
+        training_collector: Optional[ITrainingSampleCollector] = None,
     ):
         self.detector = detector
         self.compliance_service = compliance_service
         self.alert_storage = alert_storage
         self.notifier = notifier
+        self.training_collector = training_collector
         self._running = False
 
     def execute(
@@ -55,6 +58,8 @@ class ProcessLiveStreamUseCase:
         fps_counter = FPSCounter()
         frame_idx = 0
         total_violations_seen = 0
+        if self.training_collector:
+            self.training_collector.start_session(f"ao_vivo_{int(time.time())}")
 
         logger.info("=" * 60)
         logger.info("🚀 MONITORAMENTO AO VIVO INICIADO")
@@ -79,6 +84,10 @@ class ProcessLiveStreamUseCase:
 
                 # 2. Avaliação de conformidade
                 violations = self.compliance_service.check(detections)
+
+                # 2.1 Aprendizado Ativo
+                if self.training_collector:
+                    self.training_collector.consider(frame, detections, violations)
 
                 # 3. Tratamento de violações
                 if violations:

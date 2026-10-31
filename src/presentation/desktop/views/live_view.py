@@ -221,6 +221,9 @@ class LiveView(ctk.CTkFrame):
             fps_timer = time.time()
             fps_count = 0
             cur_fps = 0.0
+            collector = getattr(self.container, "training_collector", None)
+            if collector:
+                collector.start_session(f"ao_vivo_{int(fps_timer)}")
 
             while not self.stop_requested:
                 ret, frame = cap.read()
@@ -236,6 +239,11 @@ class LiveView(ctk.CTkFrame):
 
                 # Inferência YOLO
                 detections = self.container.detector.detect(frame, skip_frames=1)
+
+                # Aprendizado Ativo: guarda frames duvidosos para revisão
+                if collector:
+                    collector.consider(frame, detections)
+
                 annotated = draw_detections(frame, detections)
 
                 viols_count = sum(1 for d in detections if d.is_violation)

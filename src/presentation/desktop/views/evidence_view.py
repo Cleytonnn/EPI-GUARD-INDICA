@@ -228,7 +228,7 @@ class EvidenceView(ctk.CTkFrame):
         os.startfile(p)
 
     def _open_csv_report(self) -> None:
-        p = Path(self.container.settings.batch.output_csv).resolve()
+        p = Path(self.container.settings.video_batch.report_csv).resolve()
         if p.exists():
             os.startfile(p)
         else:

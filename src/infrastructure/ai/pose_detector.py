@@ -549,7 +549,7 @@ class PoseEPIDetector(IDetector):
         try:
             if hasattr(self.model, "predictor") and self.model.predictor is not None:
                 if hasattr(self.model.predictor, "trackers"):
-                    self.model.predictor.trackers = None
+                    delattr(self.model.predictor, "trackers")
             logger.debug("🔄 Tracking do modelo Pose resetado.")
         except Exception:
             pass

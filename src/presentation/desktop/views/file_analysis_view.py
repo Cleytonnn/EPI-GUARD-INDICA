@@ -425,6 +425,10 @@ class FileAnalysisView(ctk.CTkFrame):
             if hasattr(self.container.detector, "is_cabin"):
                 self.container.detector.is_cabin = bool(metadata.is_cabin)
 
+            collector = getattr(self.container, "training_collector", None)
+            if collector:
+                collector.start_session(metadata.video_name)
+
             skip_frames = self.container.settings.detection.skip_frames or 2
             consecutive_target = self.container.settings.compliance.min_violation_frames
 
@@ -447,6 +451,10 @@ class FileAnalysisView(ctk.CTkFrame):
                     detections=detections,
                     metadata=current_meta,
                 )
+
+                # Aprendizado Ativo: guarda o frame original se for duvidoso ou gerou alerta
+                if collector:
+                    collector.consider(frame, detections, confirmed_violations, current_meta)
 
                 # Desenhar anotações e tarja
                 from src.presentation.cli.visualizer import draw_detections, draw_vehicle_metadata

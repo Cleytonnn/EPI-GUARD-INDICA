@@ -28,6 +28,7 @@ from src.presentation.desktop.views.batch_view import BatchView
 from src.presentation.desktop.views.evidence_view import EvidenceView
 from src.presentation.desktop.views.file_analysis_view import FileAnalysisView
 from src.presentation.desktop.views.live_view import LiveView
+from src.presentation.desktop.views.training_review_view import TrainingReviewView
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,7 @@ class PPEComplianceDesktopApp(BaseAppClass):
             ("batch_view", "📂 Lote & Pastas", "Varredura [PLACA]>[DATA]"),
             ("live_view", "📹 Câmera ao Vivo", "Transmissão RTSP / Webcam"),
             ("evidence_view", "🚨 Alertas & Evidências", "Fotos salvas e relatório CSV"),
+            ("training_review", "🧠 Revisão p/ Treino", "Confirme frames para retreinar a IA"),
         ]
 
         for view_key, title, subtitle in nav_items:
@@ -181,6 +183,7 @@ class PPEComplianceDesktopApp(BaseAppClass):
             "batch_view": lambda: BatchView(self.content_container, self.container),
             "live_view": lambda: LiveView(self.content_container, self.container),
             "evidence_view": lambda: EvidenceView(self.content_container, self.container),
+            "training_review": lambda: TrainingReviewView(self.content_container, self.container),
         }
         self._cached_views = {}
 

@@ -13,7 +13,7 @@ def test_desktop_app_initialization_and_view_switching():
     app.update()
 
     # Garantir que todas as telas registradas são instanciadas
-    expected_views = ["file_analysis", "batch_view", "live_view", "evidence_view"]
+    expected_views = ["file_analysis", "batch_view", "live_view", "evidence_view", "training_review"]
     for view_key in expected_views:
         assert view_key in app.views
         app._show_view(view_key)
