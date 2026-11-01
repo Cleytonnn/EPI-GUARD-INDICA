@@ -54,23 +54,50 @@ class UniversalVideoReader(IVideoReader):
 
         suffix = Path(self.video_path).suffix.lower()
 
-        # 1. Se for extensão .265, .h265 ou .hevc, priorizar PyAV
+        # 1. Tentar OpenCV com FFMPEG nativo primeiro (sempre gera frames limpos sem macroblocos verdes em .265/.mp4)
+        if self._try_opencv():
+            return
+
+        # 2. Se for arquivo de CFTV (.265/.hevc) e o VLC estiver disponível, usar motor VLC para remux limpo
+        if suffix in {".265", ".h265", ".hevc"}:
+            if self._try_vlc_remux():
+                return
+
+        # 3. Fallback: PyAV
         if suffix in {".265", ".h265", ".hevc"}:
             if self._try_pyav(force_format="hevc"):
                 return
-            if self._try_pyav():
-                return
-            if self._try_opencv():
-                return
-        else:
-            # 2. Para .mp4, .avi, etc., tentar OpenCV com FFMPEG backend primeiro
-            if self._try_opencv():
-                return
-            if self._try_pyav():
-                return
+        if self._try_pyav():
+            return
 
         logger.error(f"❌ Não foi possível abrir o arquivo com nenhum decodificador: {self.video_path}")
         self.backend = None
+
+    def _try_vlc_remux(self) -> bool:
+        """Tenta usar o VLC para reempacotar stream cru de CFTV para contêiner MP4 e abrir."""
+        try:
+            from src.infrastructure.video.vlc_service import VLCService
+            if not VLCService.is_available():
+                return False
+
+            import tempfile
+            temp_mp4 = Path(tempfile.gettempdir()) / f"vlc_clean_{Path(self.video_path).stem}.mp4"
+            remuxed = VLCService.remux_to_clean_mp4(self.video_path, temp_mp4)
+            if remuxed and remuxed.exists():
+                cap = cv2.VideoCapture(str(remuxed), cv2.CAP_FFMPEG)
+                if cap.isOpened():
+                    self._cap = cap
+                    self.backend = "vlc-remux"
+                    self._total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    self._fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+                    self._width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    self._height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    self._codec_name = "vlc-mp4"
+                    logger.info(f"🎬 Vídeo .{Path(self.video_path).suffix} recuperado com sucesso via motor VLC!")
+                    return True
+        except Exception as e:
+            logger.debug(f"VLC remux falhou: {e}")
+        return False
 
     def _try_opencv(self) -> bool:
         try:

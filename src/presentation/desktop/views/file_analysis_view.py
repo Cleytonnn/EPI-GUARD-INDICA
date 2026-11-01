@@ -202,6 +202,19 @@ class FileAnalysisView(ctk.CTkFrame):
         )
         self.vlc_btn.pack(side="left", padx=(5, 0))
 
+        # Botão para converter/reparar arquivo .265 via VLC
+        self.remux_btn = ctk.CTkButton(
+            actions_frame,
+            text="🔄 MP4 (VLC)",
+            font=FONT_BODY_BOLD,
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            width=100,
+            height=32,
+            command=self._on_remux_with_vlc,
+        )
+        self.remux_btn.pack(side="left", padx=(5, 0))
+
         # 3. Barra de Progresso
         progress_frame = ctk.CTkFrame(self, fg_color="transparent")
         progress_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 5))
@@ -633,4 +646,40 @@ class FileAnalysisView(ctk.CTkFrame):
             self.progress_label.configure(
                 text="🎬 Vídeo aberto no VLC Media Player com aceleração por hardware.",
                 text_color=COLOR_SUCCESS,
+            )
+
+    def _on_remux_with_vlc(self) -> None:
+        """Usa o VLC para reempacotar o arquivo .265 para um arquivo .mp4 limpo e padronizado."""
+        if not self.selected_file or not Path(self.selected_file).exists():
+            self.progress_label.configure(
+                text="⚠️ Por favor, solte ou selecione um arquivo de vídeo primeiro.",
+                text_color=COLOR_WARNING,
+            )
+            return
+
+        from src.infrastructure.video.vlc_service import VLCService
+        if not VLCService.is_available():
+            self.progress_label.configure(
+                text="⚠️ VLC não localizado no sistema.",
+                text_color=COLOR_WARNING,
+            )
+            return
+
+        self.progress_label.configure(
+            text="🔄 Reempacotando vídeo com VLC para MP4 limpo (sem perda de qualidade)...",
+            text_color=COLOR_WARNING,
+        )
+        self.update_idletasks()
+
+        clean_mp4 = VLCService.remux_to_clean_mp4(self.selected_file)
+        if clean_mp4 and clean_mp4.exists():
+            self._on_file_chosen(str(clean_mp4))
+            self.progress_label.configure(
+                text=f"✅ Vídeo convertido com sucesso para MP4 limpo: {clean_mp4.name}",
+                text_color=COLOR_SUCCESS,
+            )
+        else:
+            self.progress_label.configure(
+                text="❌ Falha na conversão via VLC. Verifique se o arquivo está acessível.",
+                text_color=COLOR_DANGER,
             )

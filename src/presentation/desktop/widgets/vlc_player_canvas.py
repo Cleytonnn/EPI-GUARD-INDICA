@@ -112,3 +112,4 @@ class EmbeddedVLCPlayer(ctk.CTkFrame):
     def get_length(self) -> int:
         """Retorna a duração total em milissegundos."""
         return self._player.get_length() if self._player else 0
+

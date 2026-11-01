@@ -77,3 +77,39 @@ class VLCService:
         except Exception as e:
             logger.error(f"Falha ao abrir vídeo no VLC: {e}")
             return False
+
+    @classmethod
+    def remux_to_clean_mp4(cls, input_path: str | Path, output_path: Optional[str | Path] = None) -> Optional[Path]:
+        """Usa o motor do VLC para reempacotar (remux) streams .265/H.265 em um contêiner .mp4 limpo sem perda de qualidade."""
+        vlc_exe = cls.get_vlc_executable()
+        if not vlc_exe:
+            return None
+
+        inp = Path(input_path).resolve()
+        if not inp.exists():
+            return None
+
+        if output_path is None:
+            out = inp.with_name(f"{inp.stem}_vlc_clean.mp4")
+        else:
+            out = Path(output_path).resolve()
+
+        out.parent.mkdir(parents=True, exist_ok=True)
+        cmd = [
+            str(vlc_exe),
+            "-I", "dummy",
+            str(inp),
+            f"--sout=#std{{access=file,mux=mp4,dst='{out}'}}",
+            "vlc://quit"
+        ]
+
+        try:
+            subprocess.run(cmd, capture_output=True, timeout=120)
+            if out.exists() and out.stat().st_size > 1000:
+                logger.info(f"✅ VLC remux concluído: {out}")
+                return out
+        except Exception as e:
+            logger.error(f"❌ Erro no remux do VLC: {e}")
+
+        return None
+

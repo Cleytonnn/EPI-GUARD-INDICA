@@ -28,3 +28,4 @@ def test_vlc_embedded_player_initialization():
     assert player.video_frame is not None
 
     root.destroy()
+
