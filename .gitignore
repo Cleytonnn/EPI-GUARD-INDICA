@@ -1,5 +1,5 @@
 # ============================================
-# Git Ignore - Sistema de Detecção de EPI
+# Git Ignore - EPI Guard (Clean Architecture)
 # ============================================
 
 # Ambientes virtuais
@@ -8,12 +8,14 @@ venv/
 env/
 ENV/
 
-# Arquivos compilados e caches Python
+# Arquivos compilados, caches e ferramentas de qualidade
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .coverage
 htmlcov/
 
@@ -23,8 +25,8 @@ htmlcov/
 *.pem
 *.key
 
-# Datasets e Treinamento pesado
-datasets/
+# Datasets, Aprendizado Ativo e Pesos de Treinamento
+datasets/*
 !datasets/custom_ppe_template.yaml
 runs/
 weights/
@@ -33,13 +35,14 @@ weights/
 *.onnx
 *.engine
 
-# Evidências e relatórios gerados em runtime
+# Evidências, logs e bancos locais gerados em runtime
 alertas/*
 !alertas/.gitkeep
 videos_processados.json
 relatorio_infracoes.csv
+*.log
 
-# Gravações de teste pesadas
+# Gravações brutas e vídeos temporários remuxados
 gravacoes/*
 !gravacoes/.gitkeep
 !gravacoes/ABC1D23/
@@ -47,8 +50,9 @@ gravacoes/*
 *.265
 *.hevc
 *.h265
+*_vlc_clean.mp4
 
-# IDEs e Editores
+# IDEs e Sistema Operacional
 .vscode/
 .idea/
 *.swp

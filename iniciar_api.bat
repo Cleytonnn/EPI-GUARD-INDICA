@@ -25,7 +25,7 @@ echo Pressione CTRL+C para encerrar o servidor.
 echo =======================================================================
 echo.
 
-python -m uvicorn src.presentation.api.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

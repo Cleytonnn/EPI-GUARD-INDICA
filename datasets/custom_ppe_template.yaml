@@ -1,0 +1,21 @@
+# ==============================================================
+# Configuração do Dataset Customizado para Treinamento YOLO
+# (Foco: Trabalhadores da Empresa com Uniforme RF Classe 2)
+# ==============================================================
+path: datasets/custom_ppe  # Diretório raiz do dataset customizado
+train: images/train        # Imagens de treino
+val: images/val            # Imagens de validação
+test: images/test          # Imagens de teste (opcional)
+
+# Mapeamento de Classes para Auditoria de EPIs da Empresa:
+names:
+  0: Person          # Pedestre / Pessoa comum (para não gerar alarmes falsos)
+  1: worker_rf       # Trabalhador da empresa uniformizado (conjunto RF)
+  2: helmet          # Capacete de segurança presente ✅
+  3: no_helmet       # Sem capacete 🔴
+  4: gloves          # Luvas de segurança presentes ✅
+  5: no_gloves       # Sem luvas 🔴
+  6: uniform_rf      # Uniforme RF Classe 2 (Ombro laranja + faixa refletiva) ✅
+  7: no_uniform_rf   # Sem uniforme RF / Roupa civil descaracterizada 🔴
+  8: boots           # Botas de segurança ✅
+  9: no_boots        # Sem botas 🔴

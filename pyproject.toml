@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "epi-guard"
+version = "2.0.0"
+description = "Sistema Corporativo de Monitoramento e Detecção de EPI em Tempo Real (NR-10 / NR-6)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "EPI Guard Engineering" }
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Manufacturing",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+
+[project.scripts]
+epi-guard-desktop = "src.desktop:main"
+epi-guard-cli = "src.main:main"
+epi-guard-batch = "src.video_batch:main"
+epi-guard-api = "src.api:main"
+epi-guard-cameras = "src.camera_api:main"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra -q --strict-markers"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+exclude = [
+    ".git",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "datasets",
+    "runs",
+    "weights",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501", # line too long (handled by formatter / line-length 120)
+    "B008", # function call in default argument (FastAPI Depends/File/Form)
+]
+

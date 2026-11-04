@@ -1,292 +1,187 @@
-# 🛡️ Sistema Corporativo de Detecção de EPI em Tempo Real & Processamento em Lote
+# 🛡️ EPI GUARD — Sistema Corporativo de Detecção e Auditoria de EPI (NR-10 / NR-6)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x%20%7C%20CUDA%2012-EE4C2C.svg)](https://pytorch.org/)
-[![YOLO](https://img.shields.io/badge/YOLO-v11%20Ultralytics-00FFFF.svg)](https://docs.ultralytics.com/)
+[![YOLO](https://img.shields.io/badge/YOLO-Pose%20%26%20v11%20Ultralytics-00FFFF.svg)](https://docs.ultralytics.com/)
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2F%20Hexagonal-brightgreen.svg)]()
-[![Tests](https://img.shields.io/badge/Tests-Pytest%20Passing-success.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-33%20Passed-success.svg)]()
 
-Sistema empresarial de inteligência artificial e visão computacional para conformidade de **Equipamentos de Proteção Individual (EPI)**, projetado segundo os padrões de **Clean Architecture (Arquitetura Limpa)**, **Clean Code** e princípios **SOLID**.
-
-Suporta tanto **fluxos de vídeo ao vivo (RTSP, Câmeras IP, Webcams)** quanto **processamento em lote/monitoramento de pastas de arquivos de vídeo (`.mp4`, `.avi`, `.mkv` e arquivos raw HEVC/H.265 `.265`)** organizados pela hierarquia logística de veículos e frotas (`[PLACA] > [DATA] > [VÍDEO]`).
+Sistema corporativo de visão computacional e inteligência artificial para auditoria automatizada de **Equipamentos de Proteção Individual (EPI)** — com foco em **Uniforme RF Classe 2 (NR-10)**, **Capacete de Segurança**, **Luvas de Proteção** e **filtragem inteligente de civis/pedestres** — construído sob os pilares de **Clean Architecture**, **Clean Code**, **SOLID** e **Aprendizado Ativo (Active Learning)**.
 
 ---
 
-## 🏗️ Arquitetura do Sistema (Clean Architecture / Hexagonal)
+## ✨ Destaques da Versão 2.0
 
-O projeto segue estritamente a separação em camadas independentes. Regras de negócio e entidades de domínio **não dependem de bibliotecas externas de IA, banco de dados ou frameworks web**. Detalhes tecnológicos (YOLO, PyAV, OpenCV, FastAPI) são adaptadores plugáveis através de interfaces (`Ports & Adapters`).
+- **🧠 Detecção Anatômica Híbrida (`PoseEPIDetector` & `YOLODetector`):**
+  - Ancoragem anatômica por *keypoints* do esqueleto humano (cabeça/crânio, ombros/torso e pulsos/mãos) para validar **Capacete**, **Uniforme RF Classe 2 (faixa refletiva + pala laranja fluorescente)** e **Luvas**.
+  - **Filtro Inteligente de Civis:** Pedestres na via pública são classificados como `civil` (caixa neutra cinza) e **nunca** geram falsos alertas de infração, enquanto motoristas em câmeras internas de cabine (`CH2`, `DMS`, `CABINE`) e trabalhadores uniformizados são auditados rigorosamente.
+- **🔄 Ciclo Contínuo de Aprendizado Ativo (Active Learning):**
+  - Coleta automática de frames com confiança duvidosa (`30%–60%`), frames que geraram alerta e amostragem exploratória, com deduplicação perceptual (*dHash*).
+  - Aba dedicada **`🧠 Revisão p/ Treino`** no aplicativo Desktop com revisão em 1 clique ou atalhos de teclado (`C` = Correto, `F` = Falso Alarme, `V` = Civil, `D` = Descartar) e exportação automática de dataset YOLO (`train`/`val` separados por vídeo).
+- **🎬 Integração Nativa com VLC Media Player (`libVLC`) & Leitura `.265` Sem Corrupção:**
+  - Decodificação limpa de arquivos brutos de DVR veicular (`.265`, `.h265`, `.hevc`, `.mp4`, `.avi`, `.mkv`) sem artefatos ou quadros verdes.
+  - Botão **`🔄 MP4 (VLC)`** para reempacotamento (*remux*) instantâneo de `.265` para `.mp4` sem perda de qualidade e botão **`🎬 VLC`** para reprodução nativa acelerada por hardware.
+- **⚡ Instalação e Execução em 1 Clique no Windows:**
+  - Scripts automatizados (`.bat`) para provisionamento completo de `.venv`, PyTorch CUDA, VLC e inicialização Desktop/API.
+
+---
+
+## 🏗️ Arquitetura do Sistema (Clean Architecture / Ports & Adapters)
+
+O código é estritamente organizado em camadas concêntricas. O núcleo de negócios (`src/core`) não conhece frameworks externos (OpenCV, PyTorch, CustomTkinter ou FastAPI).
 
 ```mermaid
 flowchart TD
-    subgraph Presentation ["Camada de Apresentação (Presentation Layer)"]
-        CLI["CLI Commands & Visualizer\n(src/presentation/cli)"]
-        API["FastAPI REST Endpoints\n(src/presentation/api)"]
+    subgraph Presentation ["Camada de Apresentação (src/presentation)"]
+        Desktop["Desktop App (CustomTkinter + Drag&Drop + VLC)\nsrc/presentation/desktop"]
+        CLI["CLI Commands & Visualizer\nsrc/presentation/cli"]
+        API["FastAPI REST API\nsrc/presentation/api"]
     end
 
-    subgraph Container ["Inversão de Controle & DI (IoC)"]
-        IoC["src/container.py\n(Dependency Injection Container)"]
+    subgraph IoC ["Inversão de Controle (src/container.py)"]
+        Container["Container (DI / Factory)"]
     end
 
-    subgraph Core ["Núcleo da Aplicação (Core Layer)"]
-        subgraph UseCases ["Casos de Uso (Application / Use Cases)"]
-            UC1["ProcessVideoFileUseCase"]
-            UC2["ProcessBatchUseCase"]
-            UC3["WatchDirectoryUseCase"]
-            UC4["AnalyzeFrameUseCase"]
-            UC5["ProcessStreamUseCase"]
-        end
-
-        subgraph Services ["Serviços de Domínio (Domain Services)"]
-            CS["ComplianceService\n(Regras temporais de violação)"]
-        end
-
-        subgraph Interfaces ["Portas / Contratos (Interfaces / Ports)"]
-            IDetector["IDetector"]
-            IVideoReader["IVideoReader"]
-            INotifier["INotifier"]
-            IAlertStorage["IAlertStorage"]
-            IProcessedRepo["IProcessedVideoRepository"]
-            IReportRepo["IReportRepository"]
-        end
-
-        subgraph Domain ["Entidades & Objetos de Valor (Domain)"]
-            Detection["Detection"]
-            Violation["Violation"]
-            VehicleMeta["VehicleMetadata"]
-            PPEType["PPEType"]
-        end
+    subgraph Core ["Núcleo de Domínio e Aplicação (src/core)"]
+        UseCases["Casos de Uso (src/core/use_cases)\nProcessVideoFile | ProcessBatch | WatchDirectory\nAnalyzeFrame | ProcessLiveStream"]
+        Services["Serviços de Domínio (src/core/services)\nComplianceService"]
+        Ports["Portas / Interfaces (src/core/interfaces)\nIDetector | IVideoReader | INotifier | IAlertStorage\nIProcessedVideosRepository | IViolationReportRepository\nITrainingSampleCollector"]
+        Domain["Entidades & Value Objects (src/core/domain)\nDetection | Violation | VehicleMetadata | PPEClass"]
     end
 
-    subgraph Infrastructure ["Camada de Infraestrutura (Infrastructure Layer)"]
-        YOLO["Ultralytics YOLODetector"]
-        Readers["UniversalVideoReader\n(OpenCV + PyAV Raw H.265)"]
-        Notifiers["EmailNotifier & CompositeNotifier\n+ RateLimiter"]
-        Storage["FileAlertStorage\n(Organização por Placa/Data)"]
-        Repos["JsonProcessedRepository\n& CsvReportRepository"]
+    subgraph Infrastructure ["Camada de Infraestrutura (src/infrastructure)"]
+        AI["IA (src/infrastructure/ai)\nPoseEPIDetector & YOLODetector"]
+        Video["Vídeo & VLC (src/infrastructure/video)\nUniversalVideoReader | CameraStream | VLCService"]
+        Training["Aprendizado Ativo (src/infrastructure/training)\nActiveLearningCollector"]
+        CCTV["CFTV HTTP (src/infrastructure/cctv)\nCameraAPIClient"]
+        Storage["Evidências & Relatórios\nFileAlertStorage | CsvViolationReportRepository\nJsonProcessedVideosRepository | EmailNotifier"]
     end
 
     Presentation --> UseCases
     UseCases --> Services
-    UseCases --> Interfaces
+    UseCases --> Ports
     Services --> Domain
-    Interfaces --> Domain
-    Infrastructure -.->|Implementa| Interfaces
-    IoC --> Presentation
-    IoC --> UseCases
-    IoC --> Infrastructure
+    Ports --> Domain
+    Infrastructure -.->|Implementa| Ports
+    Container --> Presentation
+    Container --> UseCases
+    Container --> Infrastructure
 ```
-
-### Princípios SOLID Aplicados:
-1. **Single Responsibility Principle (SRP):** Cada caso de uso, serviço e repositório possui uma responsabilidade única bem delineada.
-2. **Open/Closed Principle (OCP):** Novos canais de alerta (Slack, WhatsApp, Webhooks) ou novos decodificadores de vídeo podem ser conectados sem alterar os casos de uso existentes.
-3. **Liskov Substitution Principle (LSP):** Qualquer leitor de vídeo ou notificador que satisfaça o contrato de interface pode ser injetado de forma transparente.
-4. **Interface Segregation Principle (ISP):** Interfaces finas e dedicadas (`IDetector`, `IVideoReader`, `INotifier`, `IAlertStorage`, `IProcessedVideoRepository`, `IReportRepository`).
-5. **Dependency Inversion Principle (DIP):** O domínio de alto nível depende apenas de abstrações. Implementações concretas residem na camada de infraestrutura e são injetadas pelo `Container`.
 
 ---
 
-## 📁 Estrutura de Diretórios
+## 📁 Estrutura do Repositório
 
-```
+```text
 INDICADOR/
 ├── config/
-│   └── settings.yaml             # Configurações centralizadas do sistema
+│   ├── settings.yaml                  # Configurações gerais (IA, Compliance, Batch, Active Learning)
+│   └── cameras.yaml                   # Configuração de câmeras CFTV remotas via HTTP/API
 ├── models/
-│   └── best.pt                   # Modelo treinado YOLO11 de EPIs (5.2 MB)
+│   └── best.pt                        # Pesos treinados customizados para detecção de EPI
+├── scripts/
+│   ├── extract_frames.py              # Extração de frames de vídeos para rotulagem
+│   └── train_model.py                 # Fine-tuning, validação e exportação ONNX de modelos YOLO
 ├── src/
-│   ├── core/                     # NÚCLEO INDEPENDENTE DE FRAMEWORKS
-│   │   ├── domain/               # Entidades, Value Objects e Enums
-│   │   │   ├── detection.py      # Dataclass Detection e BoundingBox
-│   │   │   ├── violation.py      # Entidade Violation
-│   │   │   ├── vehicle_metadata.py # Extração e metadados de frota (Placa/Data/Arquivo)
-│   │   │   └── ppe_type.py       # Enum de tipos de EPI e violação
-│   │   ├── interfaces/           # Portas (Contratos e Protocolos abstratos)
-│   │   │   ├── detector.py       # IDetector
-│   │   │   ├── video_reader.py   # IVideoReader
-│   │   │   ├── notifier.py       # INotifier
-│   │   │   ├── alert_storage.py  # IAlertStorage
-│   │   │   ├── processed_repo.py # IProcessedVideoRepository
-│   │   │   └── report_repo.py    # IReportRepository
-│   │   ├── services/             # Serviços de Domínio
-│   │   │   └── compliance_service.py # Regras de persistência de frames consecutivos
-│   │   └── use_cases/            # Casos de Uso da Aplicação
-│   │       ├── analyze_frame.py      # Análise de um frame individual
-│   │       ├── process_video_file.py # Processamento de um arquivo completo
-│   │       ├── process_batch.py      # Varredura recursiva de diretórios
-│   │       ├── watch_directory.py    # Monitoramento contínuo em tempo real (Watcher)
-│   │       └── process_stream.py     # Processamento de streams de câmeras (RTSP/Webcam)
-│   │
-│   ├── infrastructure/           # ADAPTADORES CONCRETOS (TECNOLOGIAS)
-│   │   ├── ai/                   # YOLODetector (Ultralytics + CUDA)
-│   │   ├── video/                # UniversalVideoReader (OpenCV + PyAV HEVC Raw Bitstream)
-│   │   ├── notifications/        # EmailNotifier, CompositeNotifier, RateLimiter
-│   │   ├── storage/              # FileAlertStorage (Salva evidências anotadas por placa/data)
-│   │   └── repositories/         # CsvReportRepository, JsonProcessedRepository
-│   │
-│   ├── presentation/             # CAMADA DE ENTRADA E APRESENTAÇÃO
-│   │   ├── api/                  # FastAPI REST API (Rotas, Schemas Pydantic, Factory)
-│   │   └── cli/                  # CLI Commands e Renderizador Visual OpenCV
-│   │
-│   ├── config/                   # Carregador de configurações tipadas (Settings)
-│   ├── container.py              # Container de Injeção de Dependências (IoC)
-│   ├── main.py                   # Entrypoint CLI (100% retrocompatível)
-│   ├── video_batch.py            # Entrypoint Batch (100% retrocompatível)
-│   └── api.py                    # Entrypoint REST API (100% retrocompatível)
-│
-├── tests/                        # SUÍTE DE TESTES AUTOMATIZADOS
-│   ├── unit/                     # Testes de Domínio, Metadados e Serviços
-│   └── integration/              # Testes de Casos de Uso, Pipeline e API
-├── alertas/                      # Evidências geradas (Placa/Data/Imagens)
-├── scripts/                      # Utilitários de treinamento e benchmarks
-├── docker-compose.yml            # Orquestração de containers com suporte a GPU
-├── Dockerfile                    # Container Docker com PyTorch e FFmpeg
-├── requirements.txt              # Dependências do projeto
-└── README.md
+│   ├── config/
+│   │   └── settings.py                # Carregamento tipado (Dataclasses + YAML + .env)
+│   ├── core/                          # NÚCLEO PURO (Sem dependências de infraestrutura)
+│   │   ├── domain/                    # Detection, BoundingBox, Violation, VehicleMetadata, PPEClass
+│   │   ├── interfaces/                # Contratos abstratos (Ports)
+│   │   ├── services/                  # ComplianceService (confirmação temporal e filtro de civis)
+│   │   └── use_cases/                 # Casos de uso da aplicação
+│   ├── infrastructure/                # ADAPTADORES TECNOLÓGICOS
+│   │   ├── ai/                        # PoseEPIDetector (YOLO-Pose anatômico) e YOLODetector
+│   │   ├── cctv/                      # CameraAPIClient (Hikvision, Intelbras, ONVIF, REST)
+│   │   ├── notifications/             # EmailNotifier, CompositeNotifier, RateLimiter
+│   │   ├── repositories/              # CsvViolationReportRepository, JsonProcessedVideosRepository
+│   │   ├── storage/                   # FileAlertStorage (organização por Placa/Data)
+│   │   ├── training/                  # ActiveLearningCollector (coleta, revisão e exportação YOLO)
+│   │   └── video/                     # UniversalVideoReader, CameraStream, VLCService
+│   ├── presentation/                  # INTERFACES COM O USUÁRIO E SISTEMAS EXTERNOS
+│   │   ├── api/                       # FastAPI App, Rotas e Schemas Pydantic
+│   │   ├── cli/                       # Comandos CLI e renderizador visual OpenCV
+│   │   └── desktop/                   # App Desktop CustomTkinter (Views + Widgets + VLC)
+│   ├── container.py                   # Container de Injeção de Dependências (IoC)
+│   ├── main.py                        # Entrypoint CLI principal
+│   ├── desktop.py                     # Entrypoint da interface gráfica Desktop
+│   ├── video_batch.py                 # Entrypoint de processamento em lote
+│   ├── api.py                         # Entrypoint do servidor FastAPI
+│   └── camera_api.py                  # Entrypoint de monitoramento de câmeras via API HTTP
+├── tests/
+│   ├── unit/                          # Testes unitários isolados por componente
+│   └── integration/                   # Testes de integração do pipeline completo e API REST
+├── instalar.bat                       # Instalador automático 1-clique (Windows + CUDA + VLC)
+├── iniciar.bat                        # Inicializador 1-clique da Interface Desktop
+├── iniciar_api.bat                    # Inicializador 1-clique do Servidor FastAPI
+├── testar.bat                         # Executor 1-clique da suíte de testes Pytest
+├── run_desktop.py                     # Atalho Python para inicialização Desktop
+├── pyproject.toml                     # Metadados PEP 621, configuração do Pytest e Ruff
+├── requirements.txt                   # Dependências de produção e desenvolvimento
+├── Dockerfile                         # Imagem Docker com suporte a NVIDIA CUDA
+└── docker-compose.yml                 # Orquestração Docker com reserva de GPU
 ```
 
 ---
 
-## ⚡ Suporte a Arquivos HEVC/H.265 Brutos (`.265`)
+## 🚀 Instalação e Execução Rápida (Windows)
 
-Muitos DVRs veiculares e câmeras industriais geram arquivos com extensão `.265` contendo **raw byte-streams H.265 (HEVC)** sem contêiner MP4/MKV e com pré-alocação de disco de tamanho fixo. O `UniversalVideoReader` implementado possui:
-1. **Verificação preventiva de arquivos corrompidos/vazios:** Detecta blocos compostos integralmente por bytes nulos (`0x00`).
-2. **Decodificação de Baixo Nível via PyAV:** Inicializa o decodificador diretamente com o demuxer `hevc`, contornando falhas normais do `cv2.VideoCapture`.
-3. **Fallback Automático para OpenCV:** Se o arquivo for um container convencional (MP4, AVI), chaveia automaticamente para a biblioteca mais otimizada.
+### 1. Instalação Automática (1 Clique)
+Dê dois cliques em **`instalar.bat`** (ou execute `.\instalar.bat` no terminal). O script irá:
+1. Validar a instalação do Python 3.10+.
+2. Criar e ativar o ambiente virtual `.venv`.
+3. Detectar sua GPU NVIDIA e instalar o **PyTorch com aceleração CUDA**.
+4. Instalar todas as bibliotecas do `requirements.txt`.
+5. Baixar o modelo base `yolov8n-pose.pt` e instalar o **VLC Media Player** via `winget` caso ausente.
+
+### 2. Abrir o Aplicativo Desktop
+Dê dois cliques em **`iniciar.bat`** ou execute:
+```powershell
+.\iniciar.bat
+# ou diretamente:
+.\.venv\Scripts\python.exe run_desktop.py
+```
+
+### 3. Iniciar o Servidor de API REST (FastAPI)
+Dê dois cliques em **`iniciar_api.bat`** ou execute:
+```powershell
+.\.venv\Scripts\python.exe -m src.api --host 0.0.0.0 --port 8000
+```
+- **Swagger UI:** `http://localhost:8000/docs`
+- **Healthcheck:** `http://localhost:8000/health`
+
+### 4. Processamento em Lote via CLI (`[PLACA] > [DATA] > [VÍDEO]`)
+```powershell
+# Processar todos os vídeos pendentes na pasta gravacoes/
+.\.venv\Scripts\python.exe -m src.video_batch --dir ./gravacoes
+
+# Monitorar continuamente a chegada de novas gravações
+.\.venv\Scripts\python.exe -m src.video_batch --dir ./gravacoes --watch
+```
 
 ---
 
-## 🚀 Como Executar
+## 🧠 Ciclo de Aprendizado Ativo (Retreino Contínuo)
 
-### 🖥️ 1. Interface Gráfica Desktop (Recomendado)
+1. **Coleta Automática:** Enquanto analisa vídeos ou câmeras, o sistema salva em `datasets/coleta_ativa/pendentes/` os frames onde houve alerta ou confiança incerta (`30%–60%`), junto com os pré-rótulos no formato YOLO (`.txt`).
+2. **Curadoria Humana Rápida:** Abra a aba **`🧠 Revisão p/ Treino`** no aplicativo Desktop e revise cada amostra:
+   - **`[C]` Correto:** Confirma as caixas previstas pela IA.
+   - **`[F]` Falso Alarme:** Inverte automaticamente `no_helmet` → `helmet`, `no_uniform_rf` → `uniform_rf`, `no_gloves` → `gloves`.
+   - **`[V]` Civil / Pedestre:** Rotula as pessoas como `civil` para ensinar a IA a ignorar pedestres.
+   - **`[D]` Descartar:** Move frames borrados/ambíguos para `rejeitados/`.
+3. **Exportação e Retreino:** Clique em **`📦 Exportar Dataset de Treino`** e execute:
+   ```powershell
+   .\.venv\Scripts\python.exe scripts/train_model.py --data datasets/epi_ativo/data.yaml --epochs 100
+   ```
 
-O sistema possui uma aplicação Desktop moderna com tema escuro (Dark Mode), suporte a **Drag & Drop (arrastar e soltar arquivos)**, player integrado em tempo real e monitoramento de frota:
+---
 
-```bash
-python run_desktop.py
+## 🧪 Testes e Qualidade de Código
+
+Para rodar toda a suíte de testes automatizados (unitários + integração):
+```powershell
+.\testar.bat
 # ou:
-python -m src.desktop
-```
-
-#### Recursos da Interface Desktop:
-- 📥 **Arrastar & Soltar Vídeos (Drag & Drop):** Solte arquivos `.mp4` ou `.265` diretamente na janela para análise instantânea com a IA.
-- 📺 **Player Frame a Frame:** Visualize os trabalhadores sendo rastreados com caixas coloridas (Verde = EPI OK, Vermelho = Violação) e contador de FPS na GPU.
-- 🏷️ **Detecção Automática de Placa e Data:** Extrai os metadados do veículo automaticamente e permite edição manual.
-- 📂 **Varredura em Lote & Watch Mode:** Aponte para a pasta de gravações e processe centenas de vídeos ou deixe o monitoramento contínuo ativado.
-- 🚨 **Galeria de Evidências:** Visualize as fotos capturadas com a tarja de auditoria e abra a planilha CSV com 1 clique.
-- 📹 **Transmissão ao Vivo:** Teste webcams e câmeras IP (RTSP) diretamente na interface.
-
----
-
-### 2. Processamento em Lote via Terminal (Placa > Data > Arquivo)
-
-A IA inspeciona pastas locais ou compartilhadas na rede (`[pasta] / [PLACA] / [DATA] / [video]`):
-
-```bash
-# Processar recursivamente todos os vídeos novos
-python -m src.video_batch --dir ./gravacoes
-
-# Ou através do entrypoint principal:
-python -m src.main --batch-dir ./gravacoes
-```
-
-#### Modo Observador Contínuo (`--watch`):
-Fica monitorando o diretório e analisa novos arquivos à medida que são descarregados pelos veículos:
-```bash
-python -m src.video_batch --dir ./gravacoes --watch --interval 10
-```
-
-#### Processar um arquivo específico (`.mp4` ou `.265`):
-```bash
-python -m src.video_batch --file ./gravacoes/ABC1D23/2026-10-04/video_01.265
-```
-
----
-
-### 2. Monitoramento de Câmeras ao Vivo (RTSP / Webcam)
-
-```bash
-# Webcam padrão (source 0)
-python -m src.main
-
-# Câmera IP via stream RTSP
-python -m src.main --source "rtsp://usuario:senha@192.168.1.100:554/stream"
-
-# Modo Headless / Produção (sem abrir janela de interface gráfica)
-python -m src.main --source 0 --no-display
-```
-
----
-
-### 3. API REST FastAPI (Integração Corporativa)
-
-Inicia o servidor de inferência e compliance para consumo via HTTP:
-
-```bash
-python -m src.api --host 0.0.0.0 --port 8000
-```
-- **Documentação Swagger Interativa:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Documentação Redoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
-- **Healthcheck:** `GET /health`
-- **Estatísticas do Sistema & GPU:** `GET /stats`
-- **Envio de Arquivo multipart:** `POST /analyze/upload`
-- **Envio de Imagem em Base64:** `POST /analyze/base64`
-
----
-
-## 🧪 Suíte de Testes Automatizados
-
-O projeto conta com suíte completa de testes unitários e de integração em `tests/`:
-
-```bash
-# Executar todos os testes com saída verbosa
-pytest tests -v
-
-# Executar apenas testes unitários
-pytest tests/unit -v
-
-# Executar validação completa do sistema
-python scratch/test_full.py
-```
-
----
-
-## 📊 Entregáveis e Evidências Geradas
-
-1. **Evidências Visuais com Tarja de Auditoria:**
-   Salvas em `alertas/[PLACA]/[DATA]/` contendo imagem em alta resolução com caixas delimitadoras coloridas (Verde = EPI Presente; Vermelho = Violação) e tarja superior detalhando Placa, Data, Câmera e Minutagem.
-2. **Relatório Consolidado CSV (`relatorio_infracoes.csv`):**
-   Gera log com timestamp, placa, vídeo, instante em segundos e tipo de infração para integração com BI e planilhas gerenciais.
-3. **Controle de Idempotência (`videos_processados.json`):**
-   Garante que vídeos já auditados não sejam processados repetidamente, economizando tempo e uso de GPU.
-
----
-
-## ⚙️ Configuração Centralizada (`config/settings.yaml`)
-
-Todas as opções operacionais são configuradas via YAML com tipagem estrita:
-```yaml
-detection:
-  model_path: "models/best.pt"
-  confidence: 0.45
-  iou_threshold: 0.45
-  imgsz: 640
-  track: true
-
-compliance:
-  min_violation_frames: 5
-  required_ppe:
-    - "helmet"
-    - "gloves"
-    - "vest"
-
-batch:
-  supported_extensions:
-    - ".mp4"
-    - ".avi"
-    - ".mkv"
-    - ".265"
-    - ".hevc"
-  output_csv: "relatorio_infracoes.csv"
-  processed_db: "videos_processados.json"
+.\.venv\Scripts\python.exe -m pytest
 ```
