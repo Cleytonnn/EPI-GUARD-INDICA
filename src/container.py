@@ -6,9 +6,12 @@ serviços e casos de uso da aplicação.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Optional
-from src.config.settings import AppSettings
+from src.config.settings import ROOT_DIR, AppSettings
+from src.core.services.ppe_state_smoother import PPEStateSmoother
+from src.infrastructure.ai.hybrid_detector import HybridEPIDetector
 from src.core.services.compliance_service import ComplianceService
 from src.core.use_cases.process_video_file import ProcessVideoFileUseCase
 from src.core.use_cases.process_batch import ProcessBatchUseCase
@@ -27,6 +30,8 @@ from src.infrastructure.video.camera_stream import CameraStream
 from src.infrastructure.video.universal_reader import UniversalVideoReader
 from src.infrastructure.training.active_learning_collector import ActiveLearningCollector
 
+logger = logging.getLogger(__name__)
+
 
 class Container:
     """Fábrica de serviços e casos de uso da Clean Architecture."""
@@ -36,18 +41,19 @@ class Container:
 
         # 1. Infraestrutura - Detector de IA (Pose ou YOLO BBox)
         backend = getattr(self.settings.detection, "backend", "pose")
-        if backend == "pose":
+        if backend in ("pose", "hybrid"):
             model_file = self.settings.detection.model_path
             # Se o model_path for o padrão legado de bbox, usa o modelo de pose
             if "best.pt" in model_file:
                 model_file = "yolov8n-pose.pt"
-            self.detector = PoseEPIDetector(
+            pose_detector = PoseEPIDetector(
                 model_path=model_file,
                 confidence=self.settings.detection.confidence,
                 iou_threshold=self.settings.detection.iou_threshold,
                 imgsz=self.settings.detection.imgsz,
                 track=self.settings.detection.track,
             )
+            self.detector = self._build_hybrid(pose_detector) if backend == "hybrid" else pose_detector
         else:
             self.detector = YOLODetector(
                 model_path=self.settings.detection.model_path,
@@ -145,6 +151,33 @@ class Container:
             alert_storage=self.alert_storage,
             notifier=self.notifier,
             training_collector=self.training_collector,
+        )
+
+    def _build_hybrid(self, pose_detector: PoseEPIDetector):
+        """Cria o detector híbrido; recua para Pose puro se o modelo de EPIs não existir."""
+        det = self.settings.detection
+        model_path = Path(det.ppe_model_path)
+        if not model_path.is_absolute():
+            model_path = ROOT_DIR / model_path
+        if not model_path.exists():
+            logger.warning(
+                "Modelo de EPIs '%s' não encontrado — usando apenas Pose/heurística. "
+                "Treine com: python scripts/train_tcc.py", model_path,
+            )
+            return pose_detector
+        smoother = PPEStateSmoother(
+            alpha=det.smoothing_alpha,
+            present_on=det.present_threshold,
+            absent_on=det.absent_threshold,
+            min_observations=det.smoothing_min_obs,
+        )
+        return HybridEPIDetector(
+            pose_detector=pose_detector,
+            ppe_model_path=model_path,
+            ppe_confidence=det.ppe_confidence,
+            ppe_imgsz=det.ppe_imgsz,
+            crop_padding=det.crop_padding,
+            smoother=smoother,
         )
 
     def create_camera_stream(self, source: Optional[int | str] = None) -> CameraStream:

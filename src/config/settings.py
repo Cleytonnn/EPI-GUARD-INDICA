@@ -30,13 +30,22 @@ class CameraConfig:
 @dataclass
 class DetectionConfig:
     """Configurações do modelo de detecção de EPI."""
-    backend: str = "pose"  # "pose" (YOLO-Pose anatômico) ou "yolo" (bounding box padrão)
+    backend: str = "hybrid"  # "hybrid" (Pose + YOLOv8 de EPIs), "pose" (apenas heurística) ou "yolo"
     model_path: str = "yolov8n-pose.pt"
     confidence: float = 0.25
     iou_threshold: float = 0.45
     skip_frames: int = 2
     track: bool = True
     imgsz: int = 640
+    # --- Modelo de EPIs treinado (metodologia do TCC) e suavização temporal ---
+    ppe_model_path: str = "models/epi_best.pt"
+    ppe_confidence: float = 0.25
+    ppe_imgsz: int = 640
+    crop_padding: float = 0.12       # enquadramento: folga ao redor da pessoa no recorte
+    smoothing_alpha: float = 0.35    # EMA da evidência por EPI
+    present_threshold: float = 0.55  # histerese: limiar para declarar "presente"
+    absent_threshold: float = 0.33   # histerese: limiar para declarar "ausente"
+    smoothing_min_obs: int = 3       # observações mínimas antes de decidir
 
 
 @dataclass

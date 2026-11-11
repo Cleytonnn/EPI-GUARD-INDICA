@@ -32,6 +32,7 @@ runs/
 weights/
 *.pt
 !models/best.pt
+!models/epi_best.pt
 *.onnx
 *.engine
 

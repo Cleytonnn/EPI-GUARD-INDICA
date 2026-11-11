@@ -177,6 +177,27 @@ Dê dois cliques em **`iniciar_api.bat`** ou execute:
 
 ---
 
+## 🎯 Treinamento e Detecção (metodologia do TCC)
+
+Baseado no TCC *"Detecção de EPI's com Ferramenta de Visão Computacional"* (UFPA, 2024):
+
+| Etapa do TCC | Implementação |
+|---|---|
+| Divisão 83% treino / 12% val / 5% teste | [`prepare_tcc_dataset`](src/infrastructure/training/ppe_trainer.py) |
+| Transfer learning YOLOv8 (n/s/m) + augmentation (`degrees`, `scale`, `mixup`, `fliplr`) | [`train_model`](src/infrastructure/training/ppe_trainer.py) |
+| Métricas Precision, Recall, F1, mAP (por classe) + comparativo | [`evaluate_model`](src/infrastructure/training/ppe_trainer.py) / `runs/tcc/comparativo.md` |
+
+```powershell
+# Treina, avalia no conjunto de teste e instala o melhor modelo em models/epi_best.pt
+.\.venv\Scripts\python.exe scripts/train_tcc.py --models yolov8n.pt yolov8s.pt --epochs 100
+# Compara estabilidade (flicker) Pose vs Híbrido em um vídeo
+.\.venv\Scripts\python.exe scripts/benchmark_stability.py gravacoes/ABC1D23/2026-10-04/camera_operacao_01.mp4
+```
+
+**Detector híbrido** (`detection.backend: hybrid`): YOLO-Pose localiza pessoa e zonas anatômicas → modelo YOLOv8 de EPIs roda no **recorte enquadrado** de cada pessoa → evidências são fundidas e estabilizadas por **EMA + histerese** ([`PPEStateSmoother`](src/core/services/ppe_state_smoother.py)). EPI confirmado pelo modelo nunca gera infração; ausência só é emitida quando estável.
+
+---
+
 ## 🧪 Testes e Qualidade de Código
 
 Para rodar toda a suíte de testes automatizados (unitários + integração):

@@ -12,7 +12,16 @@ camera:
 
 # --- Modelo de Detecção ---
 detection:
-  backend: "pose"               # "pose" (YOLO-Pose anatômico para uniforme RF, luvas e capacete) ou "yolo"
+  backend: "hybrid"             # "hybrid" = Pose + YOLOv8 de EPIs (TCC) + suavizacao temporal; "pose" = so heuristica
+  ppe_model_path: "models/epi_best.pt"  # Gerado por scripts/train_tcc.py
+  ppe_confidence: 0.25          # Confianca minima do modelo de EPIs
+  ppe_imgsz: 640
+  crop_padding: 0.12            # Enquadramento: folga ao redor de cada pessoa no recorte
+  smoothing_alpha: 0.35         # EMA da evidencia por EPI (menor = mais estavel)
+  present_threshold: 0.55       # Histerese: acima disso o EPI e dado como presente
+  absent_threshold: 0.33        # Histerese: abaixo disso o EPI e dado como ausente
+  smoothing_min_obs: 3          # Observacoes minimas antes de decidir
+  # backends: "hybrid" (recomendado), "pose" (YOLO-Pose + heuristica de cor) ou "yolo" (bbox padrao)
   model_path: "yolov8n-pose.pt" # yolov8n-pose.pt para Pose ou models/best.pt para legado
   confidence: 0.20              # Threshold de confiança mínima
   iou_threshold: 0.45        # Threshold de IoU para NMS
