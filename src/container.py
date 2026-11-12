@@ -102,6 +102,7 @@ class Container:
             required_ppe=self.settings.compliance.required_ppe,
             violation_classes=self.settings.compliance.violation_classes,
             min_violation_frames=self.settings.compliance.min_violation_frames,
+            infer_missing_ppe=(backend != "hybrid"),
         )
 
         # 6.1 Aprendizado Ativo - coleta de frames para revisão e retreino

@@ -11,6 +11,8 @@ class PPEClass(str, Enum):
     UNIFORM_RF = "uniform_rf"
     BOOTS = "boots"
     GOGGLES = "goggles"
+    EAR_PROTECTION = "ear_protection"
+    MASK = "mask"
     PERSON = "Person"
     CIVIL = "civil"
     NONE = "none"
@@ -24,6 +26,8 @@ class PPEClass(str, Enum):
             self.UNIFORM_RF: "Uniforme RF ✅",
             self.BOOTS: "Botas ✅",
             self.GOGGLES: "Óculos ✅",
+            self.EAR_PROTECTION: "Abafador ✅",
+            self.MASK: "Máscara ✅",
             self.PERSON: "Pessoa",
             self.CIVIL: "Civil / Pedestre",
             self.NONE: "---",

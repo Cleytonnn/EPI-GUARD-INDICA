@@ -41,7 +41,7 @@ class DetectionConfig:
     ppe_model_path: str = "models/epi_best.pt"
     ppe_confidence: float = 0.25
     ppe_imgsz: int = 640
-    crop_padding: float = 0.12       # enquadramento: folga ao redor da pessoa no recorte
+    crop_padding: float = 0.18       # enquadramento: folga ao redor da pessoa no recorte
     smoothing_alpha: float = 0.35    # EMA da evidência por EPI
     present_threshold: float = 0.55  # histerese: limiar para declarar "presente"
     absent_threshold: float = 0.33   # histerese: limiar para declarar "ausente"

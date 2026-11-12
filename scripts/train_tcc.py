@@ -26,10 +26,10 @@ if sys.platform == "win32":
         pass
 
 from src.infrastructure.training.ppe_trainer import (  # noqa: E402
+    CANONICAL_NAMES,
     TrainingConfig,
     evaluate_model,
     prepare_tcc_dataset,
-    read_class_names,
     save_reports,
     train_model,
 )
@@ -39,35 +39,49 @@ logger = logging.getLogger("train_tcc")
 
 # Batch por tamanho de modelo (TCC: n=80, s=60, m=40, l=20 em GPU de 16GB; ajustado p/ 8GB)
 DEFAULT_BATCH = {"n": 32, "s": 16, "m": 8, "l": 4}
+DEFAULT_SOURCES = [
+    "datasets/construction-ppe",
+    "datasets/synapsis_ppe",
+    "datasets/ppe_roboflow",
+]
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--source", default="datasets/construction-ppe", help="Dataset YOLO de origem")
+    p.add_argument("--sources", nargs="+", default=None, help="Lista de datasets YOLO a unificar")
     p.add_argument("--output", default="datasets/epi_tcc", help="Dataset reorganizado 83/12/5")
+    p.add_argument("--max-per-source", type=int, default=3500, help="Limite estratificado por fonte (0 = ilimitado)")
     p.add_argument("--models", nargs="+", default=["yolov8s.pt"])
     p.add_argument("--epochs", type=int, default=100)
-    p.add_argument("--patience", type=int, default=30)
+    p.add_argument("--patience", type=int, default=25)
     p.add_argument("--imgsz", type=int, default=640)
     p.add_argument("--batch", type=int, default=0, help="0 = automático por tamanho do modelo")
     p.add_argument("--device", default="0")
     p.add_argument("--use-active-learning", action="store_true", help="Inclui frames aprovados do Aprendizado Ativo")
     p.add_argument("--keep-split", action="store_true", help="Reutiliza o dataset já reorganizado")
+    p.add_argument("--resume", action="store_true", help="Retoma treinos interrompidos (mesmo dataset) de onde pararam")
     args = p.parse_args()
 
-    source = ROOT / args.source
-    output = ROOT / args.output
-    names = read_class_names(source / "data.yaml")
+    candidates = args.sources or DEFAULT_SOURCES
+    sources = [ROOT / s for s in candidates if (ROOT / s).exists()]
+    if args.use_active_learning:
+        approved = ROOT / "datasets" / "coleta_ativa" / "aprovados"
+        if approved.exists():
+            sources.append(approved)
+    if not sources:
+        raise FileNotFoundError(f"Nenhum dataset encontrado em: {candidates}")
 
+    output = ROOT / args.output
     data_yaml = output / "data.yaml"
     if not (args.keep_split and data_yaml.exists()):
-        extras = []
-        if args.use_active_learning:
-            approved = ROOT / "datasets" / "coleta_ativa" / "aprovados"
-            if approved.exists():
-                extras.append(approved)
-        logger.info("📂 Reorganizando dataset em 83%% treino / 12%% val / 5%% teste ...")
-        data_yaml = prepare_tcc_dataset(source, output, names, extra_sources=extras)
+        logger.info("📂 Unificando %d fonte(s) na divisão TCC 83%% treino / 12%% val / 5%% teste ...", len(sources))
+        data_yaml = prepare_tcc_dataset(
+            sources[0],
+            output,
+            names=CANONICAL_NAMES,
+            extra_sources=sources[1:],
+            max_per_source=args.max_per_source,
+        )
 
     reports = []
     best_overall = None
@@ -83,7 +97,7 @@ def main() -> None:
             name=f"epi_{Path(model_name).stem}",
         )
         t0 = time.time()
-        best = train_model(data_yaml, cfg)
+        best = train_model(data_yaml, cfg, resume=args.resume)
         minutes = (time.time() - t0) / 60.0
         report = evaluate_model(best, data_yaml, split="test", imgsz=args.imgsz, device=args.device, train_minutes=minutes)
         reports.append(report)

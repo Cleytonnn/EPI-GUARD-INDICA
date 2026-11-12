@@ -407,16 +407,16 @@ class PoseEPIDetector(IDetector):
                 if (box_w / float(box_h)) > 2.6:
                     continue
 
+                conf = round(float(confs[i]), 3)
                 kps = keypoints_data[i] if keypoints_data is not None and i < len(keypoints_data) else None
 
-                # Verifica se há keypoints válidos suficientes para uma pessoa real
+                # Mantém a pessoa se houver keypoints suficientes ou confiança sólida (evita queda do track em oclusão breve)
                 if kps is not None:
                     valid_kps = sum(1 for kp in kps if kp[2] >= 0.30 and (kp[0] > 0 or kp[1] > 0))
-                    if valid_kps < 3:
+                    if valid_kps < 2 and conf < 0.45:
                         continue
 
                 track_id = int(track_ids[i]) if track_ids[i] is not None else -1
-                conf = round(float(confs[i]), 3)
 
                 if kps is None:
                     if self.only_company_workers:

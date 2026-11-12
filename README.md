@@ -188,13 +188,13 @@ Baseado no TCC *"Detecção de EPI's com Ferramenta de Visão Computacional"* (U
 | Métricas Precision, Recall, F1, mAP (por classe) + comparativo | [`evaluate_model`](src/infrastructure/training/ppe_trainer.py) / `runs/tcc/comparativo.md` |
 
 ```powershell
-# Treina, avalia no conjunto de teste e instala o melhor modelo em models/epi_best.pt
-.\.venv\Scripts\python.exe scripts/train_tcc.py --models yolov8n.pt yolov8s.pt --epochs 100
+# Treina (unifica construction-ppe, synapsis_ppe do TCC e ppe-wm4s0 do Roboflow), avalia e instala o melhor modelo em models/epi_best.pt
+.\.venv\Scripts\python.exe scripts/train_tcc.py --models yolov8n.pt yolov8s.pt --epochs 50
 # Compara estabilidade (flicker) Pose vs Híbrido em um vídeo
 .\.venv\Scripts\python.exe scripts/benchmark_stability.py gravacoes/ABC1D23/2026-10-04/camera_operacao_01.mp4
 ```
 
-**Detector híbrido** (`detection.backend: hybrid`): YOLO-Pose localiza pessoa e zonas anatômicas → modelo YOLOv8 de EPIs roda no **recorte enquadrado** de cada pessoa → evidências são fundidas e estabilizadas por **EMA + histerese** ([`PPEStateSmoother`](src/core/services/ppe_state_smoother.py)). EPI confirmado pelo modelo nunca gera infração; ausência só é emitida quando estável.
+**Detector híbrido** (`detection.backend: hybrid`): YOLO-Pose localiza e estabiliza a caixa da pessoa → modelo YOLOv8 de EPIs roda no **recorte enquadrado** (`crop_padding: 0.18`) de cada trabalhador → evidências são fundidas e estabilizadas por **EMA + histerese** ([`PPEStateSmoother`](src/core/services/ppe_state_smoother.py)). EPI confirmado pelo modelo nunca gera infração; ausência só é emitida quando estável (e o `ComplianceService` não fabrica violações durante estados `UNKNOWN`).
 
 ---
 

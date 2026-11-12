@@ -4,9 +4,16 @@ import numpy as np
 import pytest
 
 from src.core.domain.detection import Detection
+from src.core.services.compliance_service import ComplianceService
 from src.core.services.ppe_state_smoother import PPEState, PPEStateSmoother
 from src.infrastructure.ai.hybrid_detector import HybridEPIDetector, fuse_evidence
-from src.infrastructure.training.ppe_trainer import f1_score, split_counts
+from src.infrastructure.training.ppe_trainer import (
+    CANONICAL_NAMES,
+    _collect_pairs,
+    f1_score,
+    prepare_tcc_dataset,
+    split_counts,
+)
 
 
 # ----------------------------------------------------------------- smoother
@@ -184,6 +191,32 @@ def test_hybrid_emits_nothing_for_civil_without_ppe():
     assert [d.class_name for d in out] == ["civil"]
 
 
+def test_hybrid_keeps_worker_sticky_across_transient_civil_flicker():
+    """Trabalhador confirmado pelo track_id não volta para civil por oclusão breve."""
+    pose = _FakePose(_pose_worker_without_helmet_heuristic())
+    det = HybridEPIDetector(
+        pose_detector=pose,
+        ppe_model=_FakePPEModel([]),
+        smoother=PPEStateSmoother(min_observations=2),
+    )
+    frame = np.zeros((600, 800, 3), dtype=np.uint8)
+    out1 = det.detect(frame)
+    assert out1[0].class_name == "Person"
+
+    # Frame seguinte: Pose perdeu cor do uniforme e devolveu civil para o mesmo track_id=1
+    pose.dets = [Detection("civil", 0.9, (100, 50, 300, 450), 1)]
+    out2 = det.detect(frame)
+    assert out2[0].class_name == "Person"
+
+
+def test_compliance_does_not_fabricate_violation_when_unknown():
+    """Com infer_missing_ppe=False (modo híbrido), estado UNKNOWN não gera infração falsa."""
+    comp = ComplianceService(min_violation_frames=2, infer_missing_ppe=False)
+    for _ in range(5):
+        v = comp.check([Detection("Person", 0.9, (100, 50, 300, 450), 1)])
+        assert v == []
+
+
 # --------------------------------------------------------------- treinamento
 def test_split_counts_follow_tcc_ratio():
     train, val, test = split_counts(1416)
@@ -195,3 +228,26 @@ def test_split_counts_follow_tcc_ratio():
 def test_f1_score_matches_tcc_example():
     assert f1_score(0.85, 0.80) == pytest.approx(0.8242, abs=1e-3)
     assert f1_score(0.0, 0.0) == 0.0
+
+
+def test_prepare_tcc_dataset_merges_roboflow_layout_and_remaps_classes(tmp_path):
+    """Unifica layout Roboflow (train/images) remapeando coverall/no_helmet sem colisão."""
+    src = tmp_path / "rf_ds"
+    (src / "train" / "images").mkdir(parents=True)
+    (src / "train" / "labels").mkdir(parents=True)
+    (src / "data.yaml").write_text(
+        "names:\n- coverall\n- no_helmet\n", encoding="utf-8"
+    )
+    for idx in range(10):
+        (src / "train" / "images" / f"img_{idx}.jpg").write_bytes(b"jpg")
+        (src / "train" / "labels" / f"img_{idx}.txt").write_text("0 0.5 0.5 0.2 0.2\n1 0.5 0.2 0.1 0.1\n", encoding="utf-8")
+
+    assert len(_collect_pairs(src)) == 10
+    out_yaml = prepare_tcc_dataset(src, tmp_path / "merged", names=CANONICAL_NAMES)
+    assert out_yaml.exists()
+    lbls = list((tmp_path / "merged" / "labels").rglob("*.txt"))
+    assert len(lbls) == 10
+    # coverall -> vest (2), no_helmet -> no_helmet (6)
+    content = lbls[0].read_text(encoding="utf-8")
+    assert "2 0.5 0.5 0.2 0.2" in content
+    assert "6 0.5 0.2 0.1 0.1" in content

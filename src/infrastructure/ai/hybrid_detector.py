@@ -105,7 +105,7 @@ class HybridEPIDetector(IDetector):
         ppe_confidence: float = 0.25,
         ppe_iou: float = 0.5,
         ppe_imgsz: int = 640,
-        crop_padding: float = 0.12,
+        crop_padding: float = 0.18,
         smoother: Optional[PPEStateSmoother] = None,
         ppe_model=None,
     ):
@@ -115,6 +115,7 @@ class HybridEPIDetector(IDetector):
         self.ppe_imgsz = int(ppe_imgsz)
         self.crop_padding = float(crop_padding)
         self.smoother = smoother or PPEStateSmoother()
+        self._confirmed_workers: set[int] = set()
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         if ppe_model is not None:
@@ -219,10 +220,19 @@ class HybridEPIDetector(IDetector):
             person = group.person
             tid = person.track_id if person.track_id not in (None, -1) else -(idx + 1)
 
-            # Pedestre: só é promovido a trabalhador se o modelo vê capacete/colete com folga
+            # Suaviza o enquadramento da própria pessoa para evitar saltos quadro a quadro
+            _, _, smooth_person_box = self.smoother.update((tid, "person"), 1.0, person.bbox)
+            if smooth_person_box is not None:
+                person = Detection(person.class_name, person.confidence, smooth_person_box, person.track_id)
+
+            # Pedestre: só é promovido a trabalhador se já foi confirmado neste track ou se o modelo vê EPI com folga
             if group.is_civil:
-                strong = [d for d in model_dets if d.class_name in {"helmet", "vest"} and d.confidence >= 0.5]
-                if not strong:
+                strong = [
+                    d for d in model_dets
+                    if d.class_name in {"helmet", "vest", "uniform_rf", "coverall"} and d.confidence >= 0.45
+                ]
+                was_worker = tid >= 0 and tid in self._confirmed_workers
+                if not strong and not was_worker:
                     output.append(person)
                     continue
                 zones = default_zones(person.bbox)
@@ -230,6 +240,9 @@ class HybridEPIDetector(IDetector):
                 person = Detection("Person", person.confidence, person.bbox, person.track_id)
             else:
                 zones = {}
+
+            if tid >= 0:
+                self._confirmed_workers.add(tid)
 
             output.append(person)
             self._emit_items(output, group, model_dets, zones, tid, person, frame_w, frame_h)
@@ -239,13 +252,14 @@ class HybridEPIDetector(IDetector):
                     zones: Dict[str, Box], tid: int, person: Detection, frame_w: int, frame_h: int) -> None:
         pid = person.track_id
 
-        def emit(pos_name: str, neg_name: Optional[str], key: Tuple, obs: float, zone: Box) -> None:
+        def emit(pos_name: str, neg_name: Optional[str], key: Tuple, obs: float, zone: Box) -> PPEState:
             state, score, box = self.smoother.update(key, obs, zone)
             box = box or zone
             if state is PPEState.PRESENT:
                 output.append(Detection(pos_name, round(float(score), 3), box, pid))
             elif state is PPEState.ABSENT and neg_name:
                 output.append(Detection(neg_name, round(1.0 - float(score), 3), box, pid))
+            return state
 
         # --- Capacete
         h_det = group.first("helmet", "no_helmet")
@@ -256,22 +270,26 @@ class HybridEPIDetector(IDetector):
             obs = fuse_evidence(pos, neg, heur, has_negative_class=True)
             emit("helmet", "no_helmet", (tid, "helmet"), obs, mbox if (mbox and pos >= neg) else head_zone)
 
-        # --- Uniforme RF (heurística de cor; colete do modelo apenas reforça)
+        # --- Uniforme RF / Colete (aceita vest, uniform_rf e coverall)
         u_det = group.first("uniform_rf", "no_uniform_rf")
         torso_zone = u_det.bbox if u_det else zones.get("torso")
         if torso_zone:
-            vpos, vneg, vbox = self._evidence(model_dets, torso_zone, {"vest"}, set(), frame_w, frame_h)
+            vpos, vneg, vbox = self._evidence(
+                model_dets,
+                torso_zone,
+                {"vest", "uniform_rf", "coverall"},
+                {"no_vest", "no_uniform_rf", "no_coverall"},
+                frame_w,
+                frame_h,
+            )
             heur_uniform = None if u_det is None else u_det.class_name == "uniform_rf"
-            uobs = fuse_evidence(0.0, 0.0, heur_uniform, has_negative_class=False)
-            if heur_uniform is False and vpos >= 0.5:
-                uobs = 0.5  # colete de alta visibilidade detectado: não confirma ausência de uniforme
+            uobs = fuse_evidence(vpos if vpos >= 0.45 else 0.0, vneg, heur_uniform, has_negative_class=bool(vneg > 0))
             emit("uniform_rf", "no_uniform_rf", (tid, "uniform_rf"), uobs, torso_zone)
 
-            # --- Colete (modelo é a evidência principal)
-            vobs = fuse_evidence(vpos, vneg, heur_uniform, has_negative_class=False)
+            vobs = fuse_evidence(vpos, vneg, heur_uniform, has_negative_class=True)
             emit("vest", "no_vest", (tid, "vest"), vobs, vbox or torso_zone)
 
-        # --- Luvas (uma por mão; lado definido pela posição horizontal)
+        # --- Luvas (uma por mão; se uma mão tiver evidência negativa fraca só por cor com outra já com luva, evita falso alarme)
         cx_person = (person.bbox[0] + person.bbox[2]) / 2.0
         for g_det in group.all("gloves", "no_gloves"):
             side = "L" if (g_det.bbox[0] + g_det.bbox[2]) / 2.0 < cx_person else "R"
@@ -283,6 +301,7 @@ class HybridEPIDetector(IDetector):
     def reset_tracking(self) -> None:
         self.pose.reset_tracking()
         self.smoother.reset()
+        self._confirmed_workers.clear()
 
     @property
     def confidence(self) -> float:

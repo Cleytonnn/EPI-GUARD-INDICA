@@ -16,7 +16,7 @@ detection:
   ppe_model_path: "models/epi_best.pt"  # Gerado por scripts/train_tcc.py
   ppe_confidence: 0.25          # Confianca minima do modelo de EPIs
   ppe_imgsz: 640
-  crop_padding: 0.12            # Enquadramento: folga ao redor de cada pessoa no recorte
+  crop_padding: 0.18            # Enquadramento: folga ao redor de cada pessoa no recorte
   smoothing_alpha: 0.35         # EMA da evidencia por EPI (menor = mais estavel)
   present_threshold: 0.55       # Histerese: acima disso o EPI e dado como presente
   absent_threshold: 0.33        # Histerese: abaixo disso o EPI e dado como ausente
