@@ -43,6 +43,8 @@ DEFAULT_SOURCES = [
     "datasets/construction-ppe",
     "datasets/synapsis_ppe",
     "datasets/ppe_roboflow",
+    "datasets/worker_safety",
+    "datasets/ppe_helmet_vest",
 ]
 
 
