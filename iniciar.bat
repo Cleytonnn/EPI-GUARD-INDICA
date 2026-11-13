@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-title Sistema de Monitoramento de EPI [Desktop]
+title Sistema de Monitoramento de EPI [Desktop] - CRIADO POR CLEYTON BAUMGRATZ
 
 if exist ".venv\Scripts\python.exe" goto INICIAR_APP
 
@@ -23,6 +23,7 @@ exit /b 1
 call .venv\Scripts\activate.bat
 echo =======================================================================
 echo Iniciando Sistema de Monitoramento e Deteccao de EPI...
+echo CRIADO POR CLEYTON BAUMGRATZ
 echo =======================================================================
 echo.
 

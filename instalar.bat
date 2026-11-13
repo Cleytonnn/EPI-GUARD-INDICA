@@ -5,6 +5,7 @@ title Instalador - Sistema de Monitoramento e Deteccao de EPI
 
 echo ===============================================================================
 echo        INSTALADOR AUTOMATICO - SISTEMA DE DETECCAO DE EPI [NR-10 / NR-6]
+echo                        CRIADO POR CLEYTON BAUMGRATZ
 echo ===============================================================================
 echo.
 

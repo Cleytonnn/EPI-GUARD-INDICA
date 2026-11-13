@@ -149,6 +149,11 @@ def draw_status_bar(
     cv2.putText(annotated, viol_text, (150, y_pos), font, 0.55, viol_color, 1, cv2.LINE_AA)
     cv2.putText(annotated, alerts_text, (330, y_pos), font, 0.55, COLOR_WHITE, 1, cv2.LINE_AA)
 
+    sig = "CRIADO POR CLEYTON BAUMGRATZ"
+    (sig_w, _), _ = cv2.getTextSize(sig, font, 0.45, 1)
+    if w - sig_w - 12 > 460:
+        cv2.putText(annotated, sig, (w - sig_w - 12, y_pos), font, 0.45, (180, 220, 255), 1, cv2.LINE_AA)
+
     return annotated
 
 

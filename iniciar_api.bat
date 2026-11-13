@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-title Servidor de API - Deteccao de EPI [FastAPI]
+title Servidor de API - Deteccao de EPI [FastAPI] - CRIADO POR CLEYTON BAUMGRATZ
 
 if exist ".venv\Scripts\python.exe" goto INICIAR_API
 
@@ -21,6 +21,7 @@ call .venv\Scripts\activate.bat
 echo =======================================================================
 echo Iniciando Servidor de API FastAPI em http://localhost:8000
 echo Documentacao Swagger disponivel em http://localhost:8000/docs
+echo CRIADO POR CLEYTON BAUMGRATZ
 echo Pressione CTRL+C para encerrar o servidor.
 echo =======================================================================
 echo.

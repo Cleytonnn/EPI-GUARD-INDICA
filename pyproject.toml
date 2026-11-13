@@ -9,7 +9,7 @@ description = "Sistema Corporativo de Monitoramento e Detecção de EPI em Tempo
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    { name = "EPI Guard Engineering" }
+    { name = "Cleyton Baumgratz" }
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

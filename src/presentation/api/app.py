@@ -23,7 +23,10 @@ def create_app(container: Optional[Container] = None) -> FastAPI:
 
     app = FastAPI(
         title="🛡️ Sistema de Detecção de EPI - API REST",
-        description="API corporativa para inferência e compliance de Equipamentos de Proteção Individual em tempo real.",
+        description=(
+            "API corporativa para inferência e compliance de Equipamentos de Proteção Individual "
+            "em tempo real. CRIADO POR CLEYTON BAUMGRATZ."
+        ),
         version="2.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
@@ -47,6 +50,7 @@ def create_app(container: Optional[Container] = None) -> FastAPI:
     def root():
         return {
             "message": "Sistema de Detecção de EPI - API REST ativa",
+            "author": "CRIADO POR CLEYTON BAUMGRATZ",
             "docs": "/docs",
             "health": "/health",
             "version": "2.0.0",

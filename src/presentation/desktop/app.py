@@ -57,7 +57,7 @@ class PPEComplianceDesktopApp(BaseAppClass):
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
 
-        self.title("🛡️ Sistema Corporativo de Detecção de EPI - Desktop")
+        self.title("🛡️ Sistema Corporativo de Detecção de EPI - Desktop | CRIADO POR CLEYTON BAUMGRATZ")
         self.geometry("1240x780")
         self.minsize(1050, 680)
         self.configure(fg_color=BG_MAIN)
@@ -169,7 +169,14 @@ class PPEComplianceDesktopApp(BaseAppClass):
             text="Versão 2.0 (Clean Architecture)",
             font=("Segoe UI", 8),
             text_color=TEXT_MUTED,
-        ).pack(anchor="w", padx=12, pady=(4, 10))
+        ).pack(anchor="w", padx=12, pady=(4, 2))
+
+        ctk.CTkLabel(
+            footer_frame,
+            text="CRIADO POR CLEYTON BAUMGRATZ",
+            font=("Segoe UI", 9, "bold"),
+            text_color=COLOR_PRIMARY,
+        ).pack(anchor="w", padx=12, pady=(0, 10))
 
         # 2. Container de Conteúdo Principal
         self.content_container = ctk.CTkFrame(self, fg_color=BG_MAIN, corner_radius=0)

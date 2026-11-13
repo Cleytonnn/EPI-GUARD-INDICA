@@ -5,7 +5,10 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x%20%7C%20CUDA%2012-EE4C2C.svg)](https://pytorch.org/)
 [![YOLO](https://img.shields.io/badge/YOLO-Pose%20%26%20v11%20Ultralytics-00FFFF.svg)](https://docs.ultralytics.com/)
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2F%20Hexagonal-brightgreen.svg)]()
-[![Tests](https://img.shields.io/badge/Tests-33%20Passed-success.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-50%20Passed-success.svg)]()
+[![Author](https://img.shields.io/badge/CRIADO%20POR-CLEYTON%20BAUMGRATZ-orange.svg)]()
+
+> **CRIADO POR CLEYTON BAUMGRATZ**
 
 Sistema corporativo de visão computacional e inteligência artificial para auditoria automatizada de **Equipamentos de Proteção Individual (EPI)** — com foco em **Uniforme RF Classe 2 (NR-10)**, **Capacete de Segurança**, **Luvas de Proteção** e **filtragem inteligente de civis/pedestres** — construído sob os pilares de **Clean Architecture**, **Clean Code**, **SOLID** e **Aprendizado Ativo (Active Learning)**.
 
@@ -206,3 +209,10 @@ Para rodar toda a suíte de testes automatizados (unitários + integração):
 # ou:
 .\.venv\Scripts\python.exe -m pytest
 ```
+
+---
+
+## 👨‍💻 Autor
+
+**CRIADO POR CLEYTON BAUMGRATZ**
+

@@ -10,6 +10,9 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 call .venv\Scripts\activate.bat
+echo =======================================================================
+echo Suite de Testes Automatizados - CRIADO POR CLEYTON BAUMGRATZ
+echo =======================================================================
 echo Executando testes unitarios e de integracao...
 python -m pytest tests/ -v
 echo.
