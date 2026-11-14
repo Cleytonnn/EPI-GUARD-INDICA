@@ -41,6 +41,14 @@ class FPSCounter:
         return self._fps
 
 
+def _ascii_label(text: str) -> str:
+    """Remove acentos e emojis incompatíveis com cv2.putText (evita '?' nas caixas)."""
+    import unicodedata
+    norm = unicodedata.normalize("NFKD", text)
+    ascii_only = norm.encode("ascii", "ignore").decode("ascii")
+    return " ".join(ascii_only.split())
+
+
 def draw_detections(
     frame: np.ndarray,
     detections: List[Detection],
@@ -48,6 +56,7 @@ def draw_detections(
 ) -> np.ndarray:
     """Desenha caixas delimitadoras e rótulos das detecções no frame."""
     annotated = frame.copy()
+    placed_labels: List[Tuple[int, int, int, int]] = []
 
     for det in detections:
         if det.class_name == "civil":
@@ -64,7 +73,7 @@ def draw_detections(
         x1, y1, x2, y2 = det.bbox
         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, bbox_thickness)
 
-        label_parts = [det.label_pt]
+        label_parts = [_ascii_label(det.label_pt)]
         if det.track_id is not None:
             label_parts.append(f"#{det.track_id}")
         label_parts.append(f"{det.confidence:.0%}")
@@ -75,13 +84,32 @@ def draw_detections(
         font_thick = 1
         (txt_w, txt_h), baseline = cv2.getTextSize(label, font, font_scale, font_thick)
 
-        label_y1 = max(0, y1 - txt_h - baseline - 4)
-        label_y2 = y1
-        cv2.rectangle(annotated, (x1, label_y1), (x1 + txt_w + 6, label_y2), color, -1)
+        box_h = txt_h + baseline + 4
+        label_y2 = max(box_h, y1)
+        label_y1 = label_y2 - box_h
+        lx2 = x1 + txt_w + 6
+
+        # Evita sobreposição vertical quando dois rótulos coincidem na mesma posição
+        for _ in range(5):
+            overlap = any(
+                not (lx2 < px1 or x1 > px2 or label_y2 < py1 or label_y1 > py2)
+                for px1, py1, px2, py2 in placed_labels
+            )
+            if not overlap:
+                break
+            if label_y1 - box_h - 2 >= 0:
+                label_y1 -= box_h + 2
+                label_y2 -= box_h + 2
+            else:
+                label_y1 += box_h + 2
+                label_y2 += box_h + 2
+
+        placed_labels.append((x1, label_y1, lx2, label_y2))
+        cv2.rectangle(annotated, (x1, label_y1), (lx2, label_y2), color, -1)
         cv2.putText(
             annotated,
             label,
-            (x1 + 3, y1 - baseline - 2),
+            (x1 + 3, label_y2 - baseline - 2),
             font,
             font_scale,
             COLOR_WHITE,

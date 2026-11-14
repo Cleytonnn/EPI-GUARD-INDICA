@@ -23,7 +23,7 @@ detection:
   smoothing_min_obs: 3          # Observacoes minimas antes de decidir
   # backends: "hybrid" (recomendado), "pose" (YOLO-Pose + heuristica de cor) ou "yolo" (bbox padrao)
   model_path: "yolov8n-pose.pt" # yolov8n-pose.pt para Pose ou models/best.pt para legado
-  confidence: 0.20              # Threshold de confiança mínima
+  confidence: 0.22              # Threshold de confiança mínima
   iou_threshold: 0.45        # Threshold de IoU para NMS
   skip_frames: 2             # Processar a cada N frames (1 = todos)
   track: true                # Habilitar tracking de objetos (ByteTrack)
@@ -31,7 +31,7 @@ detection:
 
 # --- Regras de Conformidade ---
 compliance:
-  min_violation_frames: 3    # Frames consecutivos para confirmar uma violação (ideal para 15-30 FPS)
+  min_violation_frames: 4    # Frames consecutivos para confirmar uma violação (ideal para 15-30 FPS)
   required_ppe:              # Lista de EPIs obrigatórios a verificar
     - helmet
     - gloves

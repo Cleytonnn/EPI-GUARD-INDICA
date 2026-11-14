@@ -115,7 +115,7 @@ class HybridEPIDetector(IDetector):
         self.ppe_imgsz = int(ppe_imgsz)
         self.crop_padding = float(crop_padding)
         self.smoother = smoother or PPEStateSmoother()
-        self._confirmed_workers: set[int] = set()
+        self._worker_grace: Dict[int, int] = {}
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         if ppe_model is not None:
@@ -225,24 +225,29 @@ class HybridEPIDetector(IDetector):
             if smooth_person_box is not None:
                 person = Detection(person.class_name, person.confidence, smooth_person_box, person.track_id)
 
-            # Pedestre: só é promovido a trabalhador se já foi confirmado neste track ou se o modelo vê EPI com folga
+            # Pedestre: só mantém worker por curta janela de graça (evita lock permanente se encostar em cone)
             if group.is_civil:
                 strong = [
                     d for d in model_dets
-                    if d.class_name in {"helmet", "vest", "uniform_rf", "coverall"} and d.confidence >= 0.45
+                    if (d.class_name == "helmet" and d.confidence >= 0.58)
+                    or (d.class_name in {"vest", "uniform_rf", "coverall"} and d.confidence >= 0.60)
                 ]
-                was_worker = tid >= 0 and tid in self._confirmed_workers
-                if not strong and not was_worker:
+                grace = self._worker_grace.get(tid, 0) if tid >= 0 else 0
+                if not strong and grace <= 0:
                     output.append(person)
                     continue
+                if tid >= 0:
+                    if strong:
+                        self._worker_grace[tid] = min(6, grace + 2)
+                    else:
+                        self._worker_grace[tid] = grace - 1
                 zones = default_zones(person.bbox)
                 group.items = []
                 person = Detection("Person", person.confidence, person.bbox, person.track_id)
             else:
                 zones = {}
-
-            if tid >= 0:
-                self._confirmed_workers.add(tid)
+                if tid >= 0:
+                    self._worker_grace[tid] = min(6, self._worker_grace.get(tid, 0) + 2)
 
             output.append(person)
             self._emit_items(output, group, model_dets, zones, tid, person, frame_w, frame_h)
@@ -267,10 +272,12 @@ class HybridEPIDetector(IDetector):
         if head_zone:
             pos, neg, mbox = self._evidence(model_dets, head_zone, {"helmet"}, {"no_helmet"}, frame_w, frame_h)
             heur = None if h_det is None else h_det.class_name == "helmet"
-            obs = fuse_evidence(pos, neg, heur, has_negative_class=True)
-            emit("helmet", "no_helmet", (tid, "helmet"), obs, mbox if (mbox and pos >= neg) else head_zone)
+            # Evita que 'no_helmet' fraco do modelo externo sobrescreva capacete confirmado pela Pose (ex.: verde/distante)
+            effective_neg = 0.0 if (heur is True and h_det is not None and h_det.confidence >= 0.42 and pos == 0.0 and neg < 0.65) else neg
+            obs = fuse_evidence(pos, effective_neg, heur, has_negative_class=True)
+            emit("helmet", "no_helmet", (tid, "helmet"), obs, mbox if (mbox and pos >= effective_neg) else head_zone)
 
-        # --- Uniforme RF / Colete (aceita vest, uniform_rf e coverall)
+        # --- Uniforme RF / Colete (Uniforme NR-10 confirmado não é sobrescrito por 'no_vest' de datasets externos)
         u_det = group.first("uniform_rf", "no_uniform_rf")
         torso_zone = u_det.bbox if u_det else zones.get("torso")
         if torso_zone:
@@ -283,25 +290,43 @@ class HybridEPIDetector(IDetector):
                 frame_h,
             )
             heur_uniform = None if u_det is None else u_det.class_name == "uniform_rf"
-            uobs = fuse_evidence(vpos if vpos >= 0.45 else 0.0, vneg, heur_uniform, has_negative_class=bool(vneg > 0))
-            emit("uniform_rf", "no_uniform_rf", (tid, "uniform_rf"), uobs, torso_zone)
+            vneg_for_rf = 0.0 if heur_uniform is True else vneg
+            uobs = fuse_evidence(
+                vpos if vpos >= 0.45 else 0.0,
+                vneg_for_rf,
+                heur_uniform,
+                has_negative_class=bool(vneg_for_rf > 0),
+            )
+            u_state = emit("uniform_rf", "no_uniform_rf", (tid, "uniform_rf"), uobs, torso_zone)
 
-            vobs = fuse_evidence(vpos, vneg, heur_uniform, has_negative_class=True)
-            emit("vest", "no_vest", (tid, "vest"), vobs, vbox or torso_zone)
+            # Evita rótulo duplicado/contraditório de colete quando Uniforme RF já está presente ou ausente no mesmo tronco
+            if u_state is PPEState.UNKNOWN and vpos >= 0.45:
+                vobs = fuse_evidence(vpos, 0.0, None, has_negative_class=False)
+                emit("vest", None, (tid, "vest"), vobs, vbox or torso_zone)
 
-        # --- Luvas (uma por mão; se uma mão tiver evidência negativa fraca só por cor com outra já com luva, evita falso alarme)
+        # --- Luvas (uma por mão visível; fallback no modelo de EPIs se punhos da Pose estiverem incertos)
         cx_person = (person.bbox[0] + person.bbox[2]) / 2.0
-        for g_det in group.all("gloves", "no_gloves"):
-            side = "L" if (g_det.bbox[0] + g_det.bbox[2]) / 2.0 < cx_person else "R"
-            pos, neg, mbox = self._evidence(model_dets, g_det.bbox, {"gloves"}, {"no_gloves"}, frame_w, frame_h)
-            obs = fuse_evidence(pos, neg, g_det.class_name == "gloves", has_negative_class=True)
-            emit("gloves", "no_gloves", (tid, f"gloves_{side}"), obs, mbox if (mbox and pos >= neg) else g_det.bbox)
+        pose_hands = group.all("gloves", "no_gloves")
+        if pose_hands:
+            for g_det in pose_hands:
+                side = "L" if (g_det.bbox[0] + g_det.bbox[2]) / 2.0 < cx_person else "R"
+                pos, neg, mbox = self._evidence(model_dets, g_det.bbox, {"gloves"}, {"no_gloves"}, frame_w, frame_h)
+                obs = fuse_evidence(pos, neg, g_det.class_name == "gloves", has_negative_class=True)
+                emit("gloves", "no_gloves", (tid, f"gloves_{side}"), obs, mbox if (mbox and pos >= neg) else g_det.bbox)
+        else:
+            for d in model_dets:
+                if d.class_name == "gloves" and d.confidence >= 0.45:
+                    side = "L" if (d.bbox[0] + d.bbox[2]) / 2.0 < cx_person else "R"
+                    emit("gloves", "no_gloves", (tid, f"gloves_{side}"), fuse_evidence(d.confidence, 0.0, None, True), d.bbox)
+                elif d.class_name == "no_gloves" and d.confidence >= 0.55:
+                    side = "L" if (d.bbox[0] + d.bbox[2]) / 2.0 < cx_person else "R"
+                    emit("gloves", "no_gloves", (tid, f"gloves_{side}"), fuse_evidence(0.0, d.confidence, None, True), d.bbox)
 
     # ---------------------------------------------------------- IDetector proxy
     def reset_tracking(self) -> None:
         self.pose.reset_tracking()
         self.smoother.reset()
-        self._confirmed_workers.clear()
+        self._worker_grace.clear()
 
     @property
     def confidence(self) -> float:

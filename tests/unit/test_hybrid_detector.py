@@ -208,6 +208,11 @@ def test_hybrid_keeps_worker_sticky_across_transient_civil_flicker():
     out2 = det.detect(frame)
     assert out2[0].class_name == "Person"
 
+    # Após esgotar a janela de graça (sem EPI por múltiplos frames), retorna para civil
+    for _ in range(3):
+        out_late = det.detect(frame)
+    assert out_late[0].class_name == "civil"
+
 
 def test_compliance_does_not_fabricate_violation_when_unknown():
     """Com infer_missing_ppe=False (modo híbrido), estado UNKNOWN não gera infração falsa."""

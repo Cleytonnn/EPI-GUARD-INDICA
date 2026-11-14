@@ -118,8 +118,10 @@ class PoseEPIDetector(IDetector):
 
         hx1 = max(0, cx - half_w)
         hx2 = min(frame_w - 1, cx + half_w)
+        # Foca na calota craniana (75% superiores) para nao diluir com pescoco/gola em vistas traseiras
+        crown_span = max(14, int(span * 0.78))
         hy1 = top
-        hy2 = min(frame_h - 1, top + max(span, 15))
+        hy2 = min(frame_h - 1, top + crown_span)
 
         if hx2 <= hx1 or hy2 <= hy1:
             return False, 0.0, (x1, y1, x2, y1 + 30)
@@ -144,46 +146,51 @@ class PoseEPIDetector(IDetector):
         gray = cv2.cvtColor(head_roi, cv2.COLOR_BGR2GRAY)
 
         # 1. Filtro de pele (Skin exclusion)
-        lower_skin = np.array([0, 35, 60], dtype=np.uint8)
-        upper_skin = np.array([25, 175, 255], dtype=np.uint8)
+        lower_skin = np.array([0, 35, 55], dtype=np.uint8)
+        upper_skin = np.array([25, 180, 255], dtype=np.uint8)
         skin_mask = cv2.inRange(hsv, lower_skin, upper_skin) & mask
 
-        # 2. Filtro de cabelo escuro / texturizado
-        dark_hair_mask = (hsv[:, :, 2] < 45) & mask
+        # 2. Filtro de cabelo escuro / sombra neutra (exclui capacete colorido na sombra)
+        dark_hair_mask = (hsv[:, :, 2] < 38) & (hsv[:, :, 1] < 65) & mask
 
         # 3. Superfície lisa de plástico (desvio padrão de brilho baixo na calota)
         masked_gray = gray[mask > 0]
         std_dev = np.std(masked_gray) if len(masked_gray) > 0 else 999.0
-        smooth_bonus = 0.25 if std_dev < 32.0 else 0.0
 
-        # 4. Cores industriais de capacete (Branco, Amarelo, Laranja, Azul, Vermelho, Verde)
-        # Branco industrial (alto V, baixo S)
-        white_mask = (hsv[:, :, 1] < 45) & (hsv[:, :, 2] > 165) & mask
+        # 4. Cores industriais de capacete (Branco brilhante, Amarelo, Laranja, Verde, Azul, Vermelho)
+        white_mask = (hsv[:, :, 1] < 38) & (hsv[:, :, 2] > 205) & mask
 
-        # Amarelo / Laranja industrial
         yellow_orange_mask = (
-            cv2.inRange(hsv, np.array([10, 60, 70]), np.array([38, 255, 255])) & mask
+            cv2.inRange(hsv, np.array([4, 55, 65]), np.array([38, 255, 255])) & mask
         )
 
-        # Azul industrial
+        # Verde industrial (ex.: capacete verde de supervisao/eletricista, inclusive em sombra)
+        green_mask = (
+            cv2.inRange(hsv, np.array([34, 35, 25]), np.array([92, 255, 255])) & mask
+        )
+
         blue_mask = (
-            cv2.inRange(hsv, np.array([90, 60, 60]), np.array([130, 255, 255])) & mask
+            cv2.inRange(hsv, np.array([90, 55, 55]), np.array([132, 255, 255])) & mask
         )
 
-        # Vermelho industrial
-        red1 = cv2.inRange(hsv, np.array([0, 70, 70]), np.array([8, 255, 255]))
-        red2 = cv2.inRange(hsv, np.array([170, 70, 70]), np.array([180, 255, 255]))
+        red1 = cv2.inRange(hsv, np.array([0, 65, 60]), np.array([8, 255, 255]))
+        red2 = cv2.inRange(hsv, np.array([168, 65, 60]), np.array([180, 255, 255]))
         red_mask = (red1 | red2) & mask
 
-        helmet_color_pixels = cv2.countNonZero(white_mask | yellow_orange_mask | blue_mask | red_mask)
+        all_helmet_colors = white_mask | yellow_orange_mask | green_mask | blue_mask | red_mask
+        helmet_color_pixels = cv2.countNonZero(all_helmet_colors)
+        color_ratio = helmet_color_pixels / float(total_pixels)
         skin_pixels = cv2.countNonZero(skin_mask)
         hair_pixels = cv2.countNonZero(dark_hair_mask)
+        skin_hair_ratio = (skin_pixels + hair_pixels) / float(total_pixels)
 
-        # Se a cabeça for dominada por pele ou cabelo escuro sem brilho liso
-        if (skin_pixels + hair_pixels) / float(total_pixels) > 0.60:
-            score = max(0.0, (helmet_color_pixels / float(total_pixels)) - 0.15)
+        # Bônus de superfície lisa só quando há presença clara de cor de capacete (evita parede cinza/calvície)
+        smooth_bonus = 0.22 if (std_dev < 32.0 and color_ratio >= 0.18 and skin_hair_ratio <= 0.45) else 0.0
+
+        if skin_hair_ratio > 0.60:
+            score = max(0.0, color_ratio - 0.15)
         else:
-            score = (helmet_color_pixels / float(total_pixels)) + smooth_bonus
+            score = color_ratio + smooth_bonus
 
         score = float(np.clip(score, 0.0, 1.0))
         has_helmet = score >= self.helmet_threshold
@@ -199,26 +206,30 @@ class PoseEPIDetector(IDetector):
         x1, y1, x2, y2 = box
         frame_h, frame_w = frame.shape[:2]
         height = y2 - y1
+        box_w = x2 - x1
 
         sl = self._get_keypoint(kps, SHOULDER_L)
         sr = self._get_keypoint(kps, SHOULDER_R)
         hl = self._get_keypoint(kps, HIP_L)
         hr = self._get_keypoint(kps, HIP_R)
 
-        # Limite superior: linha dos ombros
+        # Limite superior: linha dos ombros (alcança a pala laranja superior mesmo de lado/costas)
         if sl and sr:
-            top = min(sl[1], sr[1]) - int(height * 0.03)
-            left = min(sl[0], sr[0]) - int(height * 0.08)
-            right = max(sl[0], sr[0]) + int(height * 0.08)
+            top = max(y1 + int(height * 0.09), min(sl[1], sr[1]) - int(height * 0.10))
+            mid_x = (sl[0] + sr[0]) // 2
+            half_w = max(abs(sr[0] - sl[0]) // 2 + int(height * 0.09), int(box_w * 0.38), int(height * 0.12))
+            left = mid_x - half_w
+            right = mid_x + half_w
         elif sl or sr:
             pt = sl or sr
-            top = pt[1] - int(height * 0.03)
-            left = pt[0] - int(height * 0.20)
-            right = pt[0] + int(height * 0.20)
+            top = max(y1 + int(height * 0.09), pt[1] - int(height * 0.10))
+            half_w = max(int(height * 0.18), int(box_w * 0.38))
+            left = pt[0] - half_w
+            right = pt[0] + half_w
         else:
-            top = y1 + int(height * 0.18)
-            left = x1 + 5
-            right = x2 - 5
+            top = y1 + int(height * 0.15)
+            left = x1 + 4
+            right = x2 - 4
 
         # Limite inferior: quadris ou proporção de tronco
         if hl and hr:
@@ -243,49 +254,41 @@ class PoseEPIDetector(IDetector):
         torso_h, torso_w = torso_roi.shape[:2]
         hsv = cv2.cvtColor(torso_roi, cv2.COLOR_BGR2HSV)
 
-        # 1. Parte superior do peito/ombros (primeiros 50% do tronco) onde fica o bloco laranja
-        upper_hsv = hsv[: max(1, int(torso_h * 0.55)), :]
+        # 1. Parte superior do peito/ombros (42% superiores do tronco onde fica a pala laranja fluorescente)
+        upper_hsv = hsv[: max(1, int(torso_h * 0.42)), :]
         upper_pixels = upper_hsv.shape[0] * upper_hsv.shape[1]
 
-        # Faixa de Laranja Fluorescente da farda RF
-        lower_orange1 = np.array([4, 70, 70], dtype=np.uint8)
-        upper_orange1 = np.array([24, 255, 255], dtype=np.uint8)
+        # Laranja fluorescente de seguranca (S>=135 exclui pele, camisas vinho/marrons e vestidos bege/amarelos)
+        lower_orange1 = np.array([2, 135, 95], dtype=np.uint8)
+        upper_orange1 = np.array([22, 255, 255], dtype=np.uint8)
         orange_mask = cv2.inRange(upper_hsv, lower_orange1, upper_orange1)
 
         # Fechamento morfológico para conectar o bloco laranja
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         orange_closed = cv2.morphologyEx(orange_mask, cv2.MORPH_CLOSE, kernel)
         orange_ratio = cv2.countNonZero(orange_closed) / float(max(1, upper_pixels))
 
         # 2. Faixa refletiva horizontal cinza/prata de alta visibilidade
-        # Prata refletivo: saturação baixa e brilho médio/alto
         lower_reflec = np.array([0, 0, 130], dtype=np.uint8)
         upper_reflec = np.array([180, 55, 255], dtype=np.uint8)
         reflec_mask = cv2.inRange(hsv, lower_reflec, upper_reflec)
         reflec_ratio = cv2.countNonZero(reflec_mask) / float(max(1, torso_h * torso_w))
 
-        # 3. Tecido Cáqui / Bege RF Classe 2
-        lower_khaki = np.array([14, 20, 60], dtype=np.uint8)
-        upper_khaki = np.array([35, 130, 220], dtype=np.uint8)
+        # 3. Tecido Cáqui / Bege / Cinza-cáqui RF Classe 2
+        lower_khaki = np.array([10, 12, 55], dtype=np.uint8)
+        upper_khaki = np.array([38, 110, 220], dtype=np.uint8)
         khaki_mask = cv2.inRange(hsv, lower_khaki, upper_khaki)
         khaki_ratio = cv2.countNonZero(khaki_mask) / float(max(1, torso_h * torso_w))
 
-        # O Uniforme RF é confirmado pela presença do bloco superior laranja
-        # e pela faixa refletiva ou pelo contraste com o corpo cáqui
+        # O Uniforme RF é confirmado pela camisa laranja total OU pela pala laranja + corpo cáqui/refletivo
         is_uniform = False
         score = 0.0
 
         if orange_ratio >= self.uniform_rf_threshold:
-            # Laranja presente no ombro/peito
-            score = round(min(1.0, orange_ratio * 2.5 + (0.2 if reflec_ratio > 0.03 else 0.0)), 3)
+            score = round(min(1.0, orange_ratio * 2.5 + (0.2 if reflec_ratio > 0.025 else 0.0)), 3)
             is_uniform = True
-        elif orange_ratio >= 0.07 and reflec_ratio >= 0.04:
-            # Laranja parcial + faixa refletiva nítida
-            score = round(min(1.0, 0.65 + reflec_ratio), 3)
-            is_uniform = True
-        elif reflec_ratio >= 0.08 and khaki_ratio >= 0.20:
-            # Faixa refletiva clara com tecido cáqui operacional
-            score = round(min(1.0, 0.60 + khaki_ratio * 0.5), 3)
+        elif orange_ratio >= 0.035 and (reflec_ratio >= 0.025 or khaki_ratio >= 0.10):
+            score = round(min(1.0, 0.65 + orange_ratio + reflec_ratio), 3)
             is_uniform = True
 
         return is_uniform, score, (tx1, ty1, tx2, ty2)
@@ -296,54 +299,68 @@ class PoseEPIDetector(IDetector):
         wrist_pt: Tuple[int, int],
         elbow_pt: Optional[Tuple[int, int]],
         shoulder_w: int,
-    ) -> Tuple[bool, float, Tuple[int, int, int, int]]:
-        """Analisa a região das mãos/pulsos para verificar luvas vs pele descoberta."""
+    ) -> Tuple[Optional[bool], float, Tuple[int, int, int, int]]:
+        """Analisa a região das mãos para distinguir luvas (vaqueta/alta vis.) vs pele descoberta.
+
+        Retorna ``None`` quando a mão está oclusa (sobre manga laranja, calça escura ou sombra),
+        evitando tanto falsos positivos de ``gloves`` quanto falsos alertas de ``no_gloves``.
+        """
         frame_h, frame_w = frame.shape[:2]
         wx, wy = wrist_pt
 
-        # Vetor de projeção do antebraço até o centro da mão
         if elbow_pt:
             ex, ey = elbow_pt
             dx = wx - ex
             dy = wy - ey
             length = max(1.0, np.hypot(dx, dy))
-            # Mão projetada além do pulso
-            hx = int(wx + (dx / length) * 16)
-            hy = int(wy + (dy / length) * 16)
+            hx = int(wx + (dx / length) * 14)
+            hy = int(wy + (dy / length) * 14)
         else:
             hx, hy = wx, wy
 
-        hand_radius = max(12, int(shoulder_w * 0.14)) if shoulder_w > 0 else 18
+        hand_radius = max(11, int(shoulder_w * 0.14)) if shoulder_w > 0 else 16
         hx1 = max(0, hx - hand_radius)
         hy1 = max(0, hy - hand_radius)
         hx2 = min(frame_w - 1, hx + hand_radius)
         hy2 = min(frame_h - 1, hy + hand_radius)
 
         if hx2 <= hx1 or hy2 <= hy1:
-            return False, 0.0, (wx - 10, wy - 10, wx + 10, wy + 10)
+            return None, 0.0, (wx - 10, wy - 10, wx + 10, wy + 10)
 
         hand_roi = frame[hy1:hy2, hx1:hx2]
         if hand_roi.size == 0:
-            return False, 0.0, (hx1, hy1, hx2, hy2)
+            return None, 0.0, (hx1, hy1, hx2, hy2)
 
-        total_pixels = hand_roi.shape[0] * hand_roi.shape[1]
+        total_pixels = float(max(1, hand_roi.shape[0] * hand_roi.shape[1]))
         hsv = cv2.cvtColor(hand_roi, cv2.COLOR_BGR2HSV)
 
-        # Máscara de pele humana (Bare skin)
-        lower_skin = np.array([0, 35, 60], dtype=np.uint8)
-        upper_skin = np.array([25, 175, 255], dtype=np.uint8)
-        skin_mask = cv2.inRange(hsv, lower_skin, upper_skin)
-        skin_ratio = cv2.countNonZero(skin_mask) / float(max(1, total_pixels))
+        # 1. Filtro de oclusão por manga laranja RF ou calça escura / sombra profunda
+        orange1 = cv2.inRange(hsv, np.array([0, 165, 70]), np.array([22, 255, 255]))
+        orange2 = cv2.inRange(hsv, np.array([165, 165, 70]), np.array([180, 255, 255]))
+        orange_sleeve_ratio = cv2.countNonZero(orange1 | orange2) / total_pixels
+        dark_ratio = float(np.mean(hsv[:, :, 2] <= 42))
+        if orange_sleeve_ratio >= 0.35 or dark_ratio >= 0.65:
+            return None, 0.0, (hx1, hy1, hx2, hy2)
 
-        # Se a mão tiver alta proporção de tom de pele, está sem luva
-        if skin_ratio >= self.gloves_skin_threshold:
-            has_gloves = False
-            conf = round(skin_ratio, 3)
-        else:
-            has_gloves = True
-            conf = round(1.0 - skin_ratio, 3)
+        # 2. Luva de vaqueta (couro claro/branco/cinza: baixa saturação e brilho médio-alto)
+        vaqueta_mask = (hsv[:, :, 1] <= 58) & (hsv[:, :, 2] >= 100)
+        vaqueta_ratio = float(np.mean(vaqueta_mask))
 
-        return has_gloves, conf, (hx1, hy1, hx2, hy2)
+        # 3. Luva colorida / isolante / alta visibilidade (amarela, verde, azul)
+        hivis_mask = cv2.inRange(hsv, np.array([24, 75, 50]), np.array([135, 255, 255]))
+        hivis_ratio = cv2.countNonZero(hivis_mask) / total_pixels
+        glove_ratio = vaqueta_ratio + hivis_ratio
+
+        # 4. Pele humana descoberta (saturação >= 58 exclui couro claro de vaqueta)
+        skin_mask = cv2.inRange(hsv, np.array([0, 58, 45]), np.array([22, 195, 235]))
+        skin_ratio = cv2.countNonZero(skin_mask) / total_pixels
+
+        if ((vaqueta_ratio >= 0.34) or (hivis_ratio >= 0.25)) and glove_ratio > skin_ratio * 0.90:
+            return True, round(min(0.95, 0.55 + glove_ratio), 3), (hx1, hy1, hx2, hy2)
+        if skin_ratio >= max(self.gloves_skin_threshold, 0.40) and glove_ratio < 0.15:
+            return False, round(min(0.95, 0.45 + skin_ratio), 3), (hx1, hy1, hx2, hy2)
+
+        return None, 0.0, (hx1, hy1, hx2, hy2)
 
     def detect(self, frame: np.ndarray, skip_frames: int = 1) -> List[Detection]:
         """Executa a inferência de Pose e avaliação anatômica de EPIs."""
@@ -398,12 +415,32 @@ class PoseEPIDetector(IDetector):
 
             detections: List[Detection] = []
 
+            # Suprime duplicatas aninhadas (ex.: caixa de tronco sobreposta a pessoa inteira)
+            raw_areas = [max(1, (b[2] - b[0]) * (b[3] - b[1])) for b in boxes]
+            suppressed: set[int] = set()
+            for i in range(len(boxes)):
+                if i in suppressed:
+                    continue
+                ax1, ay1, ax2, ay2 = boxes[i]
+                for j in range(i + 1, len(boxes)):
+                    if j in suppressed:
+                        continue
+                    bx1, by1, bx2, by2 = boxes[j]
+                    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+                    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+                    if ix2 > ix1 and iy2 > iy1:
+                        inter = (ix2 - ix1) * (iy2 - iy1)
+                        if inter / min(raw_areas[i], raw_areas[j]) >= 0.58:
+                            suppressed.add(j if confs[i] >= confs[j] else i)
+
             for i, box in enumerate(boxes):
+                if i in suppressed:
+                    continue
                 x1, y1, x2, y2 = map(int, box)
                 box_w = max(1, x2 - x1)
                 box_h = max(1, y2 - y1)
 
-                # Descarte de falsos positivos: proporção achatada (reflexos no chão)
+                # Descarte de falsos positivos: proporção achatada ou artefato de lança no topo da tela
                 if (box_w / float(box_h)) > 2.6:
                     continue
 
@@ -414,6 +451,8 @@ class PoseEPIDetector(IDetector):
                 if kps is not None:
                     valid_kps = sum(1 for kp in kps if kp[2] >= 0.30 and (kp[0] > 0 or kp[1] > 0))
                     if valid_kps < 2 and conf < 0.45:
+                        continue
+                    if y1 <= 10 and valid_kps < 4 and box_w > box_h * 0.85:
                         continue
 
                 track_id = int(track_ids[i]) if track_ids[i] is not None else -1
@@ -443,11 +482,15 @@ class PoseEPIDetector(IDetector):
                 has_uniform, uniform_score, torso_box = self._analyze_uniform_rf(frame, (x1, y1, x2, y2), kps)
                 has_helmet, helmet_score, head_box = self._analyze_helmet(frame, (x1, y1, x2, y2), kps)
 
-                # Avaliação de contexto de cabine (motorista em close-up)
-                is_cabin_person = self.is_cabin or ((box_h / float(frame_h)) > 0.40 and (y2 >= frame_h * 0.85))
+                # Avaliação de contexto de cabine (somente close-up real de motorista)
+                is_cabin_person = self.is_cabin or (
+                    (box_h / float(frame_h)) > 0.62
+                    and (box_w / float(frame_w)) > 0.25
+                    and (y2 >= frame_h * 0.85)
+                )
 
                 # Critério de Funcionário da Empresa vs Pedestre/Civil na rua
-                is_company_worker = has_uniform or has_helmet or is_cabin_person
+                is_company_worker = has_uniform or (has_helmet and helmet_score >= 0.48) or is_cabin_person
 
                 # Se for civil na rua (sem uniforme RF e sem capacete): NÃO audita nem gera infração!
                 if self.only_company_workers and not is_company_worker:
@@ -512,31 +555,41 @@ class PoseEPIDetector(IDetector):
                         track_id=track_id,
                     ))
 
-                # 4. Avaliação de Luvas (Pulsos)
-                wl = self._get_keypoint(kps, WRIST_L)
-                wr = self._get_keypoint(kps, WRIST_R)
+                # 4. Avaliação de Luvas (Pulsos confiáveis e não oclusos atrás do tronco)
+                wl = self._get_keypoint(kps, WRIST_L, min_conf=0.50)
+                wr = self._get_keypoint(kps, WRIST_R, min_conf=0.50)
                 el = self._get_keypoint(kps, ELBOW_L)
                 er = self._get_keypoint(kps, ELBOW_R)
+                has_face = any(self._get_keypoint(kps, idx, min_conf=0.30) is not None for idx in (NOSE, EYE_L, EYE_R))
+                body_cx = (x1 + x2) / 2.0
 
                 for wrist, elbow in [(wl, el), (wr, er)]:
-                    if wrist:
-                        has_gloves, glove_conf, hand_box = self._analyze_gloves(
-                            frame, wrist, elbow, shoulder_w
-                        )
-                        if has_gloves:
-                            detections.append(Detection(
-                                class_name="gloves",
-                                confidence=glove_conf,
-                                bbox=hand_box,
-                                track_id=track_id,
-                            ))
-                        else:
-                            detections.append(Detection(
-                                class_name="no_gloves",
-                                confidence=glove_conf,
-                                bbox=hand_box,
-                                track_id=track_id,
-                            ))
+                    if not wrist:
+                        continue
+                    # Trabalhador de costas com pulso no meio do tronco -> mão oclusa na frente do corpo/painel
+                    if (
+                        not has_face
+                        and abs(wrist[0] - body_cx) < box_w * 0.22
+                        and (y1 + box_h * 0.18) <= wrist[1] <= (y1 + box_h * 0.56)
+                    ):
+                        continue
+                    has_gloves, glove_conf, hand_box = self._analyze_gloves(
+                        frame, wrist, elbow, shoulder_w
+                    )
+                    if has_gloves is True:
+                        detections.append(Detection(
+                            class_name="gloves",
+                            confidence=glove_conf,
+                            bbox=hand_box,
+                            track_id=track_id,
+                        ))
+                    elif has_gloves is False:
+                        detections.append(Detection(
+                            class_name="no_gloves",
+                            confidence=glove_conf,
+                            bbox=hand_box,
+                            track_id=track_id,
+                        ))
 
             return detections
 
