@@ -98,21 +98,35 @@ class PoseEPIDetector(IDetector):
 
         sl = self._get_keypoint(kps, SHOULDER_L)
         sr = self._get_keypoint(kps, SHOULDER_R)
+        nose = self._get_keypoint(kps, NOSE)
+        ear_l = self._get_keypoint(kps, EAR_L)
+        ear_r = self._get_keypoint(kps, EAR_R)
 
         # Ancoragem vertical: crânio (topo da caixa) até os ombros
         top = max(0, y1)
+
+        # Centro horizontal: prefere nariz/orelhas (acompanha inclinação da cabeça)
+        # para não fixar na parede de fundo quando o trabalhador curva para frente
+        head_cx = None
+        if nose and nose[1] > y1 and nose[1] < (y1 + (y2 - y1) * 0.45):
+            head_cx = nose[0]
+        elif ear_l and ear_r:
+            head_cx = int((ear_l[0] + ear_r[0]) / 2)
+        elif ear_l or ear_r:
+            head_cx = (ear_l or ear_r)[0]
+
         if sl and sr:
-            cx = int((sl[0] + sr[0]) / 2)
+            cx = head_cx if head_cx is not None else int((sl[0] + sr[0]) / 2)
             span = max(12, int(min(sl[1], sr[1]) - top))
             shoulder_w = abs(sr[0] - sl[0])
             half_w = max(int(shoulder_w * 0.45), int(span * 0.55), 10)
         elif sl or sr:
             shoulder = sl or sr
-            cx = shoulder[0]
+            cx = head_cx if head_cx is not None else shoulder[0]
             span = max(12, int(shoulder[1] - top))
             half_w = max(int(span * 0.55), 10)
         else:
-            cx = int((x1 + x2) / 2)
+            cx = head_cx if head_cx is not None else int((x1 + x2) / 2)
             span = max(12, int((y2 - y1) * 0.25))
             half_w = max(int((x2 - x1) * 0.40), 10)
 

@@ -273,7 +273,7 @@ class HybridEPIDetector(IDetector):
             pos, neg, mbox = self._evidence(model_dets, head_zone, {"helmet"}, {"no_helmet"}, frame_w, frame_h)
             heur = None if h_det is None else h_det.class_name == "helmet"
             # Evita que 'no_helmet' fraco do modelo externo sobrescreva capacete confirmado pela Pose (ex.: verde/distante)
-            effective_neg = 0.0 if (heur is True and h_det is not None and h_det.confidence >= 0.42 and pos == 0.0 and neg < 0.65) else neg
+            effective_neg = 0.0 if (heur is True and h_det is not None and h_det.confidence >= 0.26 and pos == 0.0 and neg < 0.70) else neg
             obs = fuse_evidence(pos, effective_neg, heur, has_negative_class=True)
             emit("helmet", "no_helmet", (tid, "helmet"), obs, mbox if (mbox and pos >= effective_neg) else head_zone)
 
