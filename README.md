@@ -135,6 +135,13 @@ INDICADOR/
 
 ## 🚀 Instalação e Execução Rápida (Windows)
 
+> ⚠️ **Pré-requisito (Git LFS):** os modelos (`models/*.pt`) e vídeos de exemplo (`*.mp4`) são versionados via **Git LFS**. Antes de clonar o repositório, execute:
+> ```powershell
+> git lfs install
+> git clone https://github.com/Cleytonnn/EPI-GUARD-INDICA.git
+> ```
+> Sem o Git LFS ativo, os arquivos `models/*.pt` ficam apenas como ponteiros de texto e o detector não carrega. Se já clonou sem LFS, rode `git lfs install` e `git lfs pull`.
+
 ### 1. Instalação Automática (1 Clique)
 Dê dois cliques em **`instalar.bat`** (ou execute `.\instalar.bat` no terminal). O script irá:
 1. Validar a instalação do Python 3.10+.
