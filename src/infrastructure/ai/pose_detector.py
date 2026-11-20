@@ -22,6 +22,18 @@ from ultralytics import YOLO
 
 from src.core.domain.detection import Detection
 from src.core.interfaces.detector import IDetector
+from src.infrastructure.ai.thresholds import (
+    CABIN_MIN_BOTTOM_RATIO,
+    CABIN_MIN_HEIGHT_RATIO,
+    CABIN_MIN_WIDTH_RATIO,
+    GLOVE_HIVIS_MIN_RATIO,
+    GLOVE_OCCLUSION_DARK_RATIO,
+    GLOVE_OCCLUSION_ORANGE_RATIO,
+    GLOVE_SKIN_DOMINANCE,
+    GLOVE_VAQUETA_MIN_RATIO,
+    NESTED_BOX_OVERLAP_RATIO,
+    WORKER_HELMET_SCORE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -345,7 +357,7 @@ class PoseEPIDetector(IDetector):
         orange2 = cv2.inRange(hsv, np.array([165, 165, 70]), np.array([180, 255, 255]))
         orange_sleeve_ratio = cv2.countNonZero(orange1 | orange2) / total_pixels
         dark_ratio = float(np.mean(hsv[:, :, 2] <= 42))
-        if orange_sleeve_ratio >= 0.35 or dark_ratio >= 0.65:
+        if orange_sleeve_ratio >= GLOVE_OCCLUSION_ORANGE_RATIO or dark_ratio >= GLOVE_OCCLUSION_DARK_RATIO:
             return None, 0.0, (hx1, hy1, hx2, hy2)
 
         # 2. Luva de vaqueta (couro claro/branco/cinza: baixa saturação e brilho médio-alto)
@@ -361,7 +373,8 @@ class PoseEPIDetector(IDetector):
         skin_mask = cv2.inRange(hsv, np.array([0, 58, 45]), np.array([22, 195, 235]))
         skin_ratio = cv2.countNonZero(skin_mask) / total_pixels
 
-        if ((vaqueta_ratio >= 0.34) or (hivis_ratio >= 0.25)) and glove_ratio > skin_ratio * 0.90:
+        has_glove_material = vaqueta_ratio >= GLOVE_VAQUETA_MIN_RATIO or hivis_ratio >= GLOVE_HIVIS_MIN_RATIO
+        if has_glove_material and glove_ratio > skin_ratio * GLOVE_SKIN_DOMINANCE:
             return True, round(min(0.95, 0.55 + glove_ratio), 3), (hx1, hy1, hx2, hy2)
         if skin_ratio >= max(self.gloves_skin_threshold, 0.40) and glove_ratio < 0.15:
             return False, round(min(0.95, 0.45 + skin_ratio), 3), (hx1, hy1, hx2, hy2)
@@ -428,7 +441,7 @@ class PoseEPIDetector(IDetector):
                     ix2, iy2 = min(ax2, bx2), min(ay2, by2)
                     if ix2 > ix1 and iy2 > iy1:
                         inter = (ix2 - ix1) * (iy2 - iy1)
-                        if inter / min(raw_areas[i], raw_areas[j]) >= 0.58:
+                        if inter / min(raw_areas[i], raw_areas[j]) >= NESTED_BOX_OVERLAP_RATIO:
                             suppressed.add(j if confs[i] >= confs[j] else i)
 
             for i, box in enumerate(boxes):
@@ -486,11 +499,15 @@ class PoseEPIDetector(IDetector):
 
                 # Avaliação de contexto de cabine (somente close-up real de motorista)
                 is_cabin_person = self.is_cabin or (
-                    (box_h / float(frame_h)) > 0.62 and (box_w / float(frame_w)) > 0.25 and (y2 >= frame_h * 0.85)
+                    (box_h / float(frame_h)) > CABIN_MIN_HEIGHT_RATIO
+                    and (box_w / float(frame_w)) > CABIN_MIN_WIDTH_RATIO
+                    and (y2 >= frame_h * CABIN_MIN_BOTTOM_RATIO)
                 )
 
                 # Critério de Funcionário da Empresa vs Pedestre/Civil na rua
-                is_company_worker = has_uniform or (has_helmet and helmet_score >= 0.48) or is_cabin_person
+                is_company_worker = (
+                    has_uniform or (has_helmet and helmet_score >= WORKER_HELMET_SCORE) or is_cabin_person
+                )
 
                 # Se for civil na rua (sem uniforme RF e sem capacete): NÃO audita nem gera infração!
                 if self.only_company_workers and not is_company_worker:

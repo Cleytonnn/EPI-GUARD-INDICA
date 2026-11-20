@@ -10,6 +10,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 call .venv\Scripts\activate.bat
+python -m pip install -q -r requirements-dev.txt
 echo =======================================================================
 echo Suite de Testes Automatizados - CRIADO POR CLEYTON BAUMGRATZ
 echo =======================================================================

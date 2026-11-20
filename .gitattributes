@@ -1,7 +1,10 @@
 # Normaliza finais de linha (alinhado ao .editorconfig)
 * text=auto eol=lf
 *.bat text eol=crlf
-*.pt binary
-*.mp4 binary
+
+# Binários pesados versionados via Git LFS (requer `git lfs install` antes do clone/pull)
+*.pt filter=lfs diff=lfs merge=lfs -text
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+
 *.jpg binary
 *.png binary

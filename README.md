@@ -98,7 +98,7 @@ INDICADOR/
 │   │   ├── services/                  # ComplianceService (confirmação temporal) e PPEStateSmoother (EMA + histerese)
 │   │   └── use_cases/                 # Casos de uso da aplicação
 │   ├── infrastructure/                # ADAPTADORES TECNOLÓGICOS
-│   │   ├── ai/                        # HybridEPIDetector, PoseEPIDetector (YOLO-Pose anatômico) e YOLODetector
+│   │   ├── ai/                        # HybridEPIDetector, PoseEPIDetector (YOLO-Pose anatômico), YOLODetector e thresholds.py (limiares calibrados)
 │   │   ├── cctv/                      # CameraAPIClient (Hikvision, Intelbras, ONVIF, REST)
 │   │   ├── notifications/             # EmailNotifier, CompositeNotifier, RateLimiter
 │   │   ├── repositories/              # CsvViolationReportRepository, JsonProcessedVideosRepository
@@ -125,8 +125,8 @@ INDICADOR/
 ├── run_desktop.py                     # Atalho Python para inicialização Desktop
 ├── pyproject.toml                     # Metadados PEP 621, configuração do Pytest e Ruff
 ├── requirements.txt                   # Dependências de execução
-├── requirements-dev.txt               # Dependências de desenvolvimento (inclui Ruff)
-├── .editorconfig / .gitattributes     # Padronização de estilo e finais de linha
+├── requirements-dev.txt               # Dependências de desenvolvimento (Pytest + Ruff)
+├── .editorconfig / .gitattributes     # Padronização de estilo, finais de linha e Git LFS (*.pt, *.mp4)
 ├── Dockerfile                         # Imagem Docker com suporte a NVIDIA CUDA
 └── docker-compose.yml                 # Orquestração Docker com reserva de GPU
 ```
@@ -208,7 +208,7 @@ Baseado no TCC *"Detecção de EPI's com Ferramenta de Visão Computacional"* (U
 
 ## 🧪 Testes e Qualidade de Código
 
-Para rodar toda a suíte de testes automatizados (unitários + integração):
+Para rodar toda a suíte de testes automatizados (unitários + integração), instale antes as dependências de desenvolvimento (`pip install -r requirements-dev.txt`; o `testar.bat` já faz isso):
 ```powershell
 .\testar.bat
 # ou:

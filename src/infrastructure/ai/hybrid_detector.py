@@ -22,6 +22,15 @@ import torch
 from src.core.domain.detection import Detection
 from src.core.interfaces.detector import IDetector
 from src.core.services.ppe_state_smoother import PPEState, PPEStateSmoother
+from src.infrastructure.ai.thresholds import (
+    CIVIL_PROMOTION_HELMET_CONF,
+    CIVIL_PROMOTION_UNIFORM_CONF,
+    MODEL_GLOVES_MIN_CONF,
+    MODEL_NO_GLOVES_MIN_CONF,
+    MODEL_NO_HELMET_OVERRIDE_CONF,
+    MODEL_VEST_MIN_CONF,
+    POSE_HELMET_TRUST_CONF,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -233,8 +242,11 @@ class HybridEPIDetector(IDetector):
                 strong = [
                     d
                     for d in model_dets
-                    if (d.class_name == "helmet" and d.confidence >= 0.58)
-                    or (d.class_name in {"vest", "uniform_rf", "coverall"} and d.confidence >= 0.60)
+                    if (d.class_name == "helmet" and d.confidence >= CIVIL_PROMOTION_HELMET_CONF)
+                    or (
+                        d.class_name in {"vest", "uniform_rf", "coverall"}
+                        and d.confidence >= CIVIL_PROMOTION_UNIFORM_CONF
+                    )
                 ]
                 grace = self._worker_grace.get(tid, 0) if tid >= 0 else 0
                 if not strong and grace <= 0:
@@ -286,10 +298,9 @@ class HybridEPIDetector(IDetector):
             pos, neg, mbox = self._evidence(model_dets, head_zone, {"helmet"}, {"no_helmet"}, frame_w, frame_h)
             heur = None if h_det is None else h_det.class_name == "helmet"
             # Evita que 'no_helmet' fraco do modelo externo sobrescreva capacete confirmado pela Pose (ex.: verde/distante)
+            pose_confirms_helmet = heur is True and h_det is not None and h_det.confidence >= POSE_HELMET_TRUST_CONF
             effective_neg = (
-                0.0
-                if (heur is True and h_det is not None and h_det.confidence >= 0.26 and pos == 0.0 and neg < 0.70)
-                else neg
+                0.0 if (pose_confirms_helmet and pos == 0.0 and neg < MODEL_NO_HELMET_OVERRIDE_CONF) else neg
             )
             obs = fuse_evidence(pos, effective_neg, heur, has_negative_class=True)
             emit("helmet", "no_helmet", (tid, "helmet"), obs, mbox if (mbox and pos >= effective_neg) else head_zone)
@@ -309,7 +320,7 @@ class HybridEPIDetector(IDetector):
             heur_uniform = None if u_det is None else u_det.class_name == "uniform_rf"
             vneg_for_rf = 0.0 if heur_uniform is True else vneg
             uobs = fuse_evidence(
-                vpos if vpos >= 0.45 else 0.0,
+                vpos if vpos >= MODEL_VEST_MIN_CONF else 0.0,
                 vneg_for_rf,
                 heur_uniform,
                 has_negative_class=bool(vneg_for_rf > 0),
@@ -317,7 +328,7 @@ class HybridEPIDetector(IDetector):
             u_state = emit("uniform_rf", "no_uniform_rf", (tid, "uniform_rf"), uobs, torso_zone)
 
             # Evita rótulo duplicado/contraditório de colete quando Uniforme RF já está presente ou ausente no mesmo tronco
-            if u_state is PPEState.UNKNOWN and vpos >= 0.45:
+            if u_state is PPEState.UNKNOWN and vpos >= MODEL_VEST_MIN_CONF:
                 vobs = fuse_evidence(vpos, 0.0, None, has_negative_class=False)
                 emit("vest", None, (tid, "vest"), vobs, vbox or torso_zone)
 
@@ -332,7 +343,7 @@ class HybridEPIDetector(IDetector):
                 emit("gloves", "no_gloves", (tid, f"gloves_{side}"), obs, mbox if (mbox and pos >= neg) else g_det.bbox)
         else:
             for d in model_dets:
-                if d.class_name == "gloves" and d.confidence >= 0.45:
+                if d.class_name == "gloves" and d.confidence >= MODEL_GLOVES_MIN_CONF:
                     side = "L" if (d.bbox[0] + d.bbox[2]) / 2.0 < cx_person else "R"
                     emit(
                         "gloves",
@@ -341,7 +352,7 @@ class HybridEPIDetector(IDetector):
                         fuse_evidence(d.confidence, 0.0, None, True),
                         d.bbox,
                     )
-                elif d.class_name == "no_gloves" and d.confidence >= 0.55:
+                elif d.class_name == "no_gloves" and d.confidence >= MODEL_NO_GLOVES_MIN_CONF:
                     side = "L" if (d.bbox[0] + d.bbox[2]) / 2.0 < cx_person else "R"
                     emit(
                         "gloves",
