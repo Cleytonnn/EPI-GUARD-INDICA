@@ -1,6 +1,5 @@
 """Testes unitários para a aplicação Desktop (CustomTkinter)."""
 
-import pytest
 from src.container import Container
 from src.presentation.desktop.app import PPEComplianceDesktopApp
 

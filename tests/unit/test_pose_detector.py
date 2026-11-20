@@ -1,7 +1,7 @@
 """Testes unitários para o PoseEPIDetector."""
 
 import numpy as np
-import pytest
+
 from src.infrastructure.ai.pose_detector import PoseEPIDetector
 
 
@@ -55,7 +55,7 @@ def test_pose_detector_detects_side_profile_beige_orange_uniform_rf():
     detector.uniform_rf_threshold = 0.12
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
     # Pessoa de perfil: ombros colapsados em X (225 e 232), corpo cáqui + pala laranja superior + faixa refletiva
-    frame[145:195, 195:270] = (25, 115, 230)   # Laranja fluorescente na pala
+    frame[145:195, 195:270] = (25, 115, 230)  # Laranja fluorescente na pala
     frame[195:330, 195:270] = (115, 150, 175)  # Cáqui/bege RF
     frame[240:255, 195:270] = (185, 185, 185)  # Faixa refletiva cinza/prata
     kps = _make_keypoints(sl=(225, 180), sr=(232, 180), hl=(222, 320), hr=(235, 320))
@@ -91,6 +91,7 @@ def test_pose_detector_does_not_promote_street_pedestrian_as_cabin_worker():
     class _StubBoxes:
         def __init__(self):
             import torch
+
             self.xyxy = torch.tensor([[100.0, 560.0, 290.0, 1030.0]])
             self.conf = torch.tensor([0.88])
             self.id = torch.tensor([13])
@@ -101,7 +102,10 @@ def test_pose_detector_does_not_promote_street_pedestrian_as_cabin_worker():
     class _StubKeypoints:
         def __init__(self):
             import torch
-            kps = _make_keypoints(sl=(160, 660), sr=(230, 660), hl=(165, 810), hr=(225, 810), wrist_l=(155, 760), elbow_l=(155, 710))
+
+            kps = _make_keypoints(
+                sl=(160, 660), sr=(230, 660), hl=(165, 810), hr=(225, 810), wrist_l=(155, 760), elbow_l=(155, 710)
+            )
             self.data = torch.tensor(kps).unsqueeze(0)
 
     class _StubResult:
@@ -151,6 +155,3 @@ def test_pose_detector_ignores_civilian_yellow_dress_or_maroon_shirt():
     frame_dress[145:330, 185:275] = (140, 185, 200)
     has_u_dress, _, _ = detector._analyze_uniform_rf(frame_dress, (170, 95, 290, 440), kps)
     assert has_u_dress is False
-
-
-

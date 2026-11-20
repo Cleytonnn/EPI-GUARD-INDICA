@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
+
 import cv2
 import numpy as np
+
 from src.core.interfaces.video_reader import IVideoReader
 
 logger = logging.getLogger(__name__)
@@ -14,15 +15,15 @@ logger = logging.getLogger(__name__)
 
 class UniversalVideoReader(IVideoReader):
     """Implementa IVideoReader com decodificação direta de .265 e formatos padrão.
-    
+
     Verifica a integridade inicial do arquivo para evitar travamentos em arquivos corrompidos
     preenchidos apenas por bytes nulos (0x00).
     """
 
     def __init__(self, video_path: str | Path):
         self.video_path = str(video_path)
-        self.backend: Optional[str] = None
-        self._cap: Optional[cv2.VideoCapture] = None
+        self.backend: str | None = None
+        self._cap: cv2.VideoCapture | None = None
         self._container = None
         self._stream = None
         self._frame_generator = None
@@ -77,10 +78,12 @@ class UniversalVideoReader(IVideoReader):
         """Tenta usar o VLC para reempacotar stream cru de CFTV para contêiner MP4 e abrir."""
         try:
             from src.infrastructure.video.vlc_service import VLCService
+
             if not VLCService.is_available():
                 return False
 
             import tempfile
+
             temp_mp4 = Path(tempfile.gettempdir()) / f"vlc_clean_{Path(self.video_path).stem}.mp4"
             remuxed = VLCService.remux_to_clean_mp4(self.video_path, temp_mp4)
             if remuxed and remuxed.exists():
@@ -120,9 +123,10 @@ class UniversalVideoReader(IVideoReader):
             logger.debug(f"OpenCV falhou para {self.video_path}: {e}")
         return False
 
-    def _try_pyav(self, force_format: Optional[str] = None) -> bool:
+    def _try_pyav(self, force_format: str | None = None) -> bool:
         try:
             import av
+
             if force_format:
                 container = av.open(self.video_path, format=force_format)
             else:
@@ -152,7 +156,7 @@ class UniversalVideoReader(IVideoReader):
     def is_opened(self) -> bool:
         return self.backend is not None
 
-    def read(self) -> Tuple[bool, Optional[np.ndarray]]:
+    def read(self) -> tuple[bool, np.ndarray | None]:
         if self.backend == "opencv" and self._cap is not None:
             return self._cap.read()
         elif self.backend == "pyav" and self._frame_generator is not None:

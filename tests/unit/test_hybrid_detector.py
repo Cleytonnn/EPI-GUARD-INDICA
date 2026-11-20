@@ -240,12 +240,12 @@ def test_prepare_tcc_dataset_merges_roboflow_layout_and_remaps_classes(tmp_path)
     src = tmp_path / "rf_ds"
     (src / "train" / "images").mkdir(parents=True)
     (src / "train" / "labels").mkdir(parents=True)
-    (src / "data.yaml").write_text(
-        "names:\n- coverall\n- no_helmet\n", encoding="utf-8"
-    )
+    (src / "data.yaml").write_text("names:\n- coverall\n- no_helmet\n", encoding="utf-8")
     for idx in range(10):
         (src / "train" / "images" / f"img_{idx}.jpg").write_bytes(b"jpg")
-        (src / "train" / "labels" / f"img_{idx}.txt").write_text("0 0.5 0.5 0.2 0.2\n1 0.5 0.2 0.1 0.1\n", encoding="utf-8")
+        (src / "train" / "labels" / f"img_{idx}.txt").write_text(
+            "0 0.5 0.5 0.2 0.2\n1 0.5 0.2 0.1 0.1\n", encoding="utf-8"
+        )
 
     assert len(_collect_pairs(src)) == 10
     out_yaml = prepare_tcc_dataset(src, tmp_path / "merged", names=CANONICAL_NAMES)

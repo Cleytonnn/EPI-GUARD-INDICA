@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+
 from src.core.domain.ppe_type import ViolationClass
 from src.core.domain.vehicle_metadata import VehicleMetadata
 
@@ -11,13 +11,14 @@ from src.core.domain.vehicle_metadata import VehicleMetadata
 @dataclass
 class Violation:
     """Representa uma violação de segurança confirmada pelas regras de conformidade."""
+
     violation_type: str
-    track_id: Optional[int]
+    track_id: int | None
     timestamp: float
     consecutive_frames: int
     confidence: float
-    bbox: Tuple[int, int, int, int]
-    metadata: Optional[VehicleMetadata] = None
+    bbox: tuple[int, int, int, int]
+    metadata: VehicleMetadata | None = None
 
     @property
     def description(self) -> str:

@@ -21,7 +21,6 @@ import random
 import shutil
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import yaml
 
@@ -33,7 +32,7 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 TCC_SPLIT = (0.83, 0.12, 0.05)
 
 # Taxonomia unificada do projeto (compatível com ComplianceService e HybridEPIDetector)
-CANONICAL_NAMES: Dict[int, str] = {
+CANONICAL_NAMES: dict[int, str] = {
     0: "helmet",
     1: "gloves",
     2: "vest",
@@ -49,7 +48,7 @@ CANONICAL_NAMES: Dict[int, str] = {
     12: "mask",
 }
 
-CLASS_ALIASES: Dict[str, str] = {
+CLASS_ALIASES: dict[str, str] = {
     "helmet": "helmet",
     "capacete": "helmet",
     "gloves": "gloves",
@@ -152,7 +151,7 @@ class EvaluationReport:
     map50: float
     map50_95: float
     train_minutes: float = 0.0
-    per_class: List[ClassMetrics] = field(default_factory=list)
+    per_class: list[ClassMetrics] = field(default_factory=list)
 
     def to_markdown(self) -> str:
         lines = [
@@ -187,12 +186,12 @@ def split_counts(total: int, ratios: tuple = TCC_SPLIT) -> tuple:
 
 
 def _canonical_id_map(
-    source_names: Dict[int, str],
-    target_names: Dict[int, str],
-) -> Dict[int, int]:
+    source_names: dict[int, str],
+    target_names: dict[int, str],
+) -> dict[int, int]:
     """Mapeia IDs de classe de um dataset para os IDs canônicos de destino."""
     target_by_name = {name: idx for idx, name in target_names.items()}
-    mapping: Dict[int, int] = {}
+    mapping: dict[int, int] = {}
     for src_id, raw_name in source_names.items():
         norm = CLASS_ALIASES.get(str(raw_name).strip().lower(), str(raw_name).strip())
         if norm in target_by_name:
@@ -200,9 +199,9 @@ def _canonical_id_map(
     return mapping
 
 
-def remap_label_lines(text: str, id_map: Dict[int, int]) -> List[str]:
+def remap_label_lines(text: str, id_map: dict[int, int]) -> list[str]:
     """Remapeia IDs de classes em um arquivo .txt YOLO, descartando classes não mapeadas."""
-    out: List[str] = []
+    out: list[str] = []
     for line in text.splitlines():
         parts = line.strip().split()
         if len(parts) < 5:
@@ -217,9 +216,9 @@ def remap_label_lines(text: str, id_map: Dict[int, int]) -> List[str]:
     return out
 
 
-def _collect_pairs(source_dir: Path) -> List[tuple]:
+def _collect_pairs(source_dir: Path) -> list[tuple]:
     """Coleta pares (imagem, label) nos layouts Ultralytics (images/split) ou Roboflow (split/images)."""
-    pairs: List[tuple] = []
+    pairs: list[tuple] = []
     seen: set[Path] = set()
 
     def scan(img_dir: Path, lbl_dir: Path) -> None:
@@ -241,10 +240,10 @@ def _collect_pairs(source_dir: Path) -> List[tuple]:
 
 
 def _sample_balanced_items(
-    items: List[tuple],
+    items: list[tuple],
     max_items: int,
     seed: int,
-) -> List[tuple]:
+) -> list[tuple]:
     """Seleciona até ``max_items`` priorizando imagens com classes mais raras (ex.: no_gloves, vest, boots)."""
     if max_items <= 0 or len(items) <= max_items:
         return items
@@ -253,7 +252,7 @@ def _sample_balanced_items(
 
     rng = random.Random(seed)
     class_freq: Counter[int] = Counter()
-    parsed: List[tuple] = []
+    parsed: list[tuple] = []
     for img, lines in items:
         classes = {int(ln.split()[0]) for ln in lines}
         for c in classes:
@@ -272,10 +271,10 @@ def _sample_balanced_items(
 def prepare_tcc_dataset(
     source_dir: str | Path,
     output_dir: str | Path,
-    names: Optional[Dict[int, str]] = None,
+    names: dict[int, str] | None = None,
     ratios: tuple = TCC_SPLIT,
     seed: int = 42,
-    extra_sources: Optional[List[str | Path]] = None,
+    extra_sources: list[str | Path] | None = None,
     max_per_source: int = 0,
 ) -> Path:
     """Reagrupa um ou mais datasets YOLO na divisão 83/12/5 do TCC e gera o ``data.yaml``.
@@ -287,7 +286,7 @@ def prepare_tcc_dataset(
     source_list = [Path(source_dir), *(Path(s) for s in (extra_sources or []))]
     output_dir = Path(output_dir)
 
-    all_samples: List[tuple] = []  # (img_path, remapped_lines)
+    all_samples: list[tuple] = []  # (img_path, remapped_lines)
     for src_idx, src in enumerate(source_list):
         if not src.exists():
             continue
@@ -297,7 +296,7 @@ def prepare_tcc_dataset(
         else:
             id_map = {int(k): int(k) for k in target_names}
 
-        src_items: List[tuple] = []
+        src_items: list[tuple] = []
         for img, label in _collect_pairs(src):
             lines = remap_label_lines(label.read_text(encoding="utf-8", errors="ignore"), id_map)
             if lines:
@@ -317,8 +316,8 @@ def prepare_tcc_dataset(
     n_train, n_val, _ = split_counts(len(all_samples), ratios)
     buckets = {
         "train": all_samples[:n_train],
-        "val": all_samples[n_train:n_train + n_val],
-        "test": all_samples[n_train + n_val:],
+        "val": all_samples[n_train : n_train + n_val],
+        "test": all_samples[n_train + n_val :],
     }
 
     if output_dir.exists():
@@ -346,7 +345,7 @@ def prepare_tcc_dataset(
     return data_yaml
 
 
-def read_class_names(data_yaml: str | Path) -> Dict[int, str]:
+def read_class_names(data_yaml: str | Path) -> dict[int, str]:
     """Lê os nomes das classes de um ``data.yaml``."""
     raw = yaml.safe_load(Path(data_yaml).read_text(encoding="utf-8"))
     names = raw.get("names", {})
@@ -355,7 +354,7 @@ def read_class_names(data_yaml: str | Path) -> Dict[int, str]:
     return {int(k): v for k, v in names.items()}
 
 
-def find_resumable_checkpoint(cfg: TrainingConfig, data_yaml: str | Path) -> Optional[Path]:
+def find_resumable_checkpoint(cfg: TrainingConfig, data_yaml: str | Path) -> Path | None:
     """Retorna um checkpoint de execução interrompida (mesmos dados e não concluída).
 
     Testa ``last.pt`` e, se estiver corrompido (ex.: queda de energia/servidor durante a
@@ -370,7 +369,7 @@ def find_resumable_checkpoint(cfg: TrainingConfig, data_yaml: str | Path) -> Opt
         Path("runs/detect") / cfg.project / cfg.name / "weights",
         Path(cfg.project) / cfg.name / "weights",
     ]
-    candidates: List[Path] = []
+    candidates: list[Path] = []
     for wdir in weights_dirs:
         if wdir.exists():
             candidates.append(wdir / "last.pt")
@@ -454,17 +453,19 @@ def evaluate_model(
     box = metrics.box
     names = model.names
 
-    per_class: List[ClassMetrics] = []
+    per_class: list[ClassMetrics] = []
     for idx, cls_id in enumerate(box.ap_class_index):
         p, r, ap50, ap = box.class_result(idx)
-        per_class.append(ClassMetrics(
-            name=names[int(cls_id)],
-            precision=float(p),
-            recall=float(r),
-            f1=f1_score(float(p), float(r)),
-            map50=float(ap50),
-            map50_95=float(ap),
-        ))
+        per_class.append(
+            ClassMetrics(
+                name=names[int(cls_id)],
+                precision=float(p),
+                recall=float(r),
+                f1=f1_score(float(p), float(r)),
+                map50=float(ap50),
+                map50_95=float(ap),
+            )
+        )
 
     return EvaluationReport(
         model=Path(str(weights)).parent.parent.name,
@@ -479,7 +480,7 @@ def evaluate_model(
     )
 
 
-def save_reports(reports: List[EvaluationReport], output_dir: str | Path) -> Path:
+def save_reports(reports: list[EvaluationReport], output_dir: str | Path) -> Path:
     """Salva o comparativo em JSON e Markdown (equivalente à Tabela 2 do TCC)."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

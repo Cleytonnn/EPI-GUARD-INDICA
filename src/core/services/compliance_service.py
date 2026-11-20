@@ -5,42 +5,42 @@ from __future__ import annotations
 import logging
 import time
 from collections import defaultdict
-from typing import Dict, List, Optional, Set
+
 from src.core.domain.detection import Detection
-from src.core.domain.violation import Violation
 from src.core.domain.vehicle_metadata import VehicleMetadata
+from src.core.domain.violation import Violation
 
 logger = logging.getLogger(__name__)
 
 
 class ComplianceService:
     """Validador de conformidade temporal de EPIs.
-    
+
     Aplica janela deslizante e exigência de persistência por N frames
     consecutivos para filtrar oclusões temporárias e falsos positivos.
     """
 
     def __init__(
         self,
-        required_ppe: Optional[List[str]] = None,
-        violation_classes: Optional[List[str]] = None,
+        required_ppe: list[str] | None = None,
+        violation_classes: list[str] | None = None,
         min_violation_frames: int = 5,
         infer_missing_ppe: bool = True,
         only_company_workers: bool = True,
     ):
         self.required_ppe = set(required_ppe or ["helmet", "gloves", "goggles", "vest", "boots"])
-        self.violation_classes = set(violation_classes or [
-            "no_helmet", "no_gloves", "no_boots", "no_goggle", "no_vest", "no_uniform_rf"
-        ])
+        self.violation_classes = set(
+            violation_classes or ["no_helmet", "no_gloves", "no_boots", "no_goggle", "no_vest", "no_uniform_rf"]
+        )
         self.min_violation_frames = max(1, min_violation_frames)
         self.infer_missing_ppe = infer_missing_ppe
         self.only_company_workers = bool(only_company_workers)
 
-        self._violation_counter: Dict[tuple, int] = defaultdict(int)
-        self._confidence_sum: Dict[tuple, float] = defaultdict(float)
-        self._last_bbox: Dict[tuple, tuple] = {}
-        self._current_frame_keys: Set[tuple] = set()
-        self._confirmed_violations: Set[tuple] = set()
+        self._violation_counter: dict[tuple, int] = defaultdict(int)
+        self._confidence_sum: dict[tuple, float] = defaultdict(float)
+        self._last_bbox: dict[tuple, tuple] = {}
+        self._current_frame_keys: set[tuple] = set()
+        self._confirmed_violations: set[tuple] = set()
 
     def _is_ppe_on_person(self, person_bbox: tuple, ppe_bbox: tuple, ppe_type: str = "helmet") -> bool:
         """Verifica se o EPI está na região anatômica correspondente da pessoa."""
@@ -57,25 +57,25 @@ class ComplianceService:
 
         if ppe_type in {"helmet", "no_helmet"}:
             head_y2 = py1 + int(height * 0.50)
-            return (py1 - 30 <= hcy <= head_y2 + 25)
+            return py1 - 30 <= hcy <= head_y2 + 25
         elif ppe_type in {"vest", "no_vest", "uniform_rf", "no_uniform_rf"}:
             torso_y1 = py1 + int(height * 0.15)
             torso_y2 = py1 + int(height * 0.75)
-            return (torso_y1 - 25 <= hcy <= torso_y2 + 25)
+            return torso_y1 - 25 <= hcy <= torso_y2 + 25
         elif ppe_type in {"gloves", "no_gloves"}:
             hands_y1 = py1 + int(height * 0.30)
-            return (hands_y1 - 30 <= hcy <= py2 + 30)
+            return hands_y1 - 30 <= hcy <= py2 + 30
         elif ppe_type in {"boots", "no_boots"}:
             feet_y1 = py1 + int(height * 0.65)
-            return (feet_y1 - 30 <= hcy <= py2 + 40)
+            return feet_y1 - 30 <= hcy <= py2 + 40
         else:
-            return (py1 - 30 <= hcy <= py2 + 30)
+            return py1 - 30 <= hcy <= py2 + 30
 
     def check(
         self,
-        detections: List[Detection],
-        metadata: Optional[VehicleMetadata] = None,
-    ) -> List[Violation]:
+        detections: list[Detection],
+        metadata: VehicleMetadata | None = None,
+    ) -> list[Violation]:
         """Avalia as detecções do frame atual e retorna violações confirmadas."""
         if not detections:
             # Reduz contadores de ausências que sumiram
@@ -96,17 +96,21 @@ class ComplianceService:
                 direct_no_helmets = [d for d in detections if d.class_name == "no_helmet"]
                 for person in persons:
                     has_helmet = any(self._is_ppe_on_person(person.bbox, h.bbox, "helmet") for h in helmets)
-                    has_direct_no = any(self._is_ppe_on_person(person.bbox, nh.bbox, "no_helmet") for nh in direct_no_helmets)
+                    has_direct_no = any(
+                        self._is_ppe_on_person(person.bbox, nh.bbox, "no_helmet") for nh in direct_no_helmets
+                    )
 
                     if not has_helmet and not has_direct_no:
                         px1, py1, px2, py2 = person.bbox
                         head_y2 = py1 + max(int((py2 - py1) * 0.45), 20)
-                        active_detections.append(Detection(
-                            class_name="no_helmet",
-                            confidence=round(person.confidence * 0.85, 3),
-                            bbox=(px1, py1, px2, head_y2),
-                            track_id=person.track_id,
-                        ))
+                        active_detections.append(
+                            Detection(
+                                class_name="no_helmet",
+                                confidence=round(person.confidence * 0.85, 3),
+                                bbox=(px1, py1, px2, head_y2),
+                                track_id=person.track_id,
+                            )
+                        )
 
             # 2. Luvas (Gloves)
             if "gloves" in self.required_ppe:
@@ -114,19 +118,23 @@ class ComplianceService:
                 direct_no_gloves = [d for d in detections if d.class_name == "no_gloves"]
                 for person in persons:
                     has_gloves = any(self._is_ppe_on_person(person.bbox, g.bbox, "gloves") for g in gloves)
-                    has_direct_no = any(self._is_ppe_on_person(person.bbox, ng.bbox, "no_gloves") for ng in direct_no_gloves)
+                    has_direct_no = any(
+                        self._is_ppe_on_person(person.bbox, ng.bbox, "no_gloves") for ng in direct_no_gloves
+                    )
 
                     if not has_gloves and not has_direct_no:
                         px1, py1, px2, py2 = person.bbox
                         h = py2 - py1
                         hands_y1 = py1 + int(h * 0.40)
                         hands_y2 = min(py2, py1 + int(h * 0.90))
-                        active_detections.append(Detection(
-                            class_name="no_gloves",
-                            confidence=round(person.confidence * 0.80, 3),
-                            bbox=(px1, hands_y1, px2, hands_y2),
-                            track_id=person.track_id,
-                        ))
+                        active_detections.append(
+                            Detection(
+                                class_name="no_gloves",
+                                confidence=round(person.confidence * 0.80, 3),
+                                bbox=(px1, hands_y1, px2, hands_y2),
+                                track_id=person.track_id,
+                            )
+                        )
 
             # 3. Colete (Vest)
             if "vest" in self.required_ppe:
@@ -134,19 +142,23 @@ class ComplianceService:
                 direct_no_vests = [d for d in detections if d.class_name == "no_vest"]
                 for person in persons:
                     has_vest = any(self._is_ppe_on_person(person.bbox, v.bbox, "vest") for v in vests)
-                    has_direct_no = any(self._is_ppe_on_person(person.bbox, nv.bbox, "no_vest") for nv in direct_no_vests)
+                    has_direct_no = any(
+                        self._is_ppe_on_person(person.bbox, nv.bbox, "no_vest") for nv in direct_no_vests
+                    )
 
                     if not has_vest and not has_direct_no:
                         px1, py1, px2, py2 = person.bbox
                         h = py2 - py1
                         torso_y1 = py1 + int(h * 0.15)
                         torso_y2 = py1 + int(h * 0.70)
-                        active_detections.append(Detection(
-                            class_name="no_vest",
-                            confidence=round(person.confidence * 0.85, 3),
-                            bbox=(px1, torso_y1, px2, torso_y2),
-                            track_id=person.track_id,
-                        ))
+                        active_detections.append(
+                            Detection(
+                                class_name="no_vest",
+                                confidence=round(person.confidence * 0.85, 3),
+                                bbox=(px1, torso_y1, px2, torso_y2),
+                                track_id=person.track_id,
+                            )
+                        )
 
             # 4. Uniforme RF (Uniforme Risco Fogo NR-10)
             if "uniform_rf" in self.required_ppe:
@@ -154,21 +166,25 @@ class ComplianceService:
                 direct_no_uniforms = [d for d in detections if d.class_name == "no_uniform_rf"]
                 for person in persons:
                     has_uniform = any(self._is_ppe_on_person(person.bbox, u.bbox, "uniform_rf") for u in uniforms)
-                    has_direct_no = any(self._is_ppe_on_person(person.bbox, nu.bbox, "no_uniform_rf") for nu in direct_no_uniforms)
+                    has_direct_no = any(
+                        self._is_ppe_on_person(person.bbox, nu.bbox, "no_uniform_rf") for nu in direct_no_uniforms
+                    )
 
                     if not has_uniform and not has_direct_no:
                         px1, py1, px2, py2 = person.bbox
                         h = py2 - py1
                         torso_y1 = py1 + int(h * 0.15)
                         torso_y2 = min(py2, py1 + int(h * 0.85))
-                        active_detections.append(Detection(
-                            class_name="no_uniform_rf",
-                            confidence=round(person.confidence * 0.85, 3),
-                            bbox=(px1, torso_y1, px2, torso_y2),
-                            track_id=person.track_id,
-                        ))
+                        active_detections.append(
+                            Detection(
+                                class_name="no_uniform_rf",
+                                confidence=round(person.confidence * 0.85, 3),
+                                bbox=(px1, torso_y1, px2, torso_y2),
+                                track_id=person.track_id,
+                            )
+                        )
 
-        confirmed: List[Violation] = []
+        confirmed: list[Violation] = []
         self._current_frame_keys.clear()
 
         # Identifica civis para descartar qualquer alerta em transeuntes na rua
@@ -189,10 +205,7 @@ class ComplianceService:
             self._confidence_sum[key] += det.confidence
             self._last_bbox[key] = det.bbox
 
-            if (
-                self._violation_counter[key] >= self.min_violation_frames
-                and key not in self._confirmed_violations
-            ):
+            if self._violation_counter[key] >= self.min_violation_frames and key not in self._confirmed_violations:
                 count = self._violation_counter[key]
                 avg_conf = self._confidence_sum[key] / count
 

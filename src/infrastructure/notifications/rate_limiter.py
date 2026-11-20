@@ -2,7 +2,6 @@
 
 import logging
 import time
-from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +11,7 @@ class RateLimiter:
 
     def __init__(self, cooldown_seconds: int = 60):
         self.cooldown = max(0, cooldown_seconds)
-        self._last_sent: Dict[str, float] = {}
+        self._last_sent: dict[str, float] = {}
 
     def can_send(self, key: str) -> bool:
         """Verifica se a chave atingiu o tempo mínimo desde o último disparo."""

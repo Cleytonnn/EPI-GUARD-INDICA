@@ -7,18 +7,18 @@ integrando-se aos serviços de domínio e armazenamento da Clean Architecture.
 from __future__ import annotations
 
 import base64
+import logging
+import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-import logging
 from pathlib import Path
-import time
-from typing import Callable, Dict, List, Optional
 
 import cv2
 import numpy as np
 import requests
-from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 import yaml
+from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 
 from src.config.settings import ROOT_DIR
 from src.core.interfaces.alert_storage import IAlertStorage
@@ -43,8 +43,8 @@ class RemoteCameraConfig:
     password: str = ""
     token: str = ""
     api_key_header: str = ""
-    headers: Optional[Dict[str, str]] = None
-    body: Optional[Dict] = None
+    headers: dict[str, str] | None = None
+    body: dict | None = None
     interval: float = 2.0
     timeout: int = 10
     enabled: bool = True
@@ -56,23 +56,23 @@ class CameraAPIClient:
 
     def __init__(
         self,
-        cameras: List[RemoteCameraConfig],
+        cameras: list[RemoteCameraConfig],
         detector: IDetector,
         compliance_factory: Callable[[], ComplianceService],
         alert_storage: IAlertStorage,
-        notifier: Optional[INotifier] = None,
+        notifier: INotifier | None = None,
         max_workers: int = 10,
     ):
         self.cameras = {c.camera_id: c for c in cameras if c.enabled}
         self.detector = detector
         self.compliance_factory = compliance_factory
-        self.compliance_checkers: Dict[str, ComplianceService] = {}
+        self.compliance_checkers: dict[str, ComplianceService] = {}
         self.alert_storage = alert_storage
         self.notifier = notifier
         self.max_workers = max_workers
 
         self._running = False
-        self._sessions: Dict[str, requests.Session] = {}
+        self._sessions: dict[str, requests.Session] = {}
         self._stats = {
             "total_requests": 0,
             "total_errors": 0,
@@ -106,7 +106,7 @@ class CameraAPIClient:
             self.compliance_checkers[camera_id] = self.compliance_factory()
         return self.compliance_checkers[camera_id]
 
-    def fetch_snapshot(self, camera_id: str) -> Optional[np.ndarray]:
+    def fetch_snapshot(self, camera_id: str) -> np.ndarray | None:
         """Busca um snapshot de uma câmera via HTTP e decodifica para BGR."""
         cam = self.cameras.get(camera_id)
         if not cam:
@@ -246,17 +246,17 @@ class CameraAPIClient:
         logger.info("=" * 60)
 
 
-def load_cameras_config(config_path: Optional[str | Path] = None) -> List[RemoteCameraConfig]:
+def load_cameras_config(config_path: str | Path | None = None) -> list[RemoteCameraConfig]:
     """Carrega a lista de câmeras remotas a partir de config/cameras.yaml."""
     target = Path(config_path) if config_path is not None else ROOT_DIR / "config" / "cameras.yaml"
     if not target.exists():
         logger.error(f"❌ Arquivo de câmeras não encontrado: {target}")
         return []
 
-    with open(target, "r", encoding="utf-8") as f:
+    with open(target, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
-    cameras: List[RemoteCameraConfig] = []
+    cameras: list[RemoteCameraConfig] = []
     for cam_data in data.get("cameras", []):
         cameras.append(
             RemoteCameraConfig(
@@ -279,4 +279,3 @@ def load_cameras_config(config_path: Optional[str | Path] = None) -> List[Remote
         )
 
     return cameras
-

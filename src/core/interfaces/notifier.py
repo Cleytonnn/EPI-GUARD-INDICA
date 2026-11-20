@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
+
 from src.core.domain.violation import Violation
 
 
@@ -10,6 +11,6 @@ from src.core.domain.violation import Violation
 class INotifier(Protocol):
     """Interface abstrata para envio de notificações (Email, Webhook, SMS, etc.)."""
 
-    def notify(self, violation: Violation, image_path: Optional[str] = None) -> bool:
+    def notify(self, violation: Violation, image_path: str | None = None) -> bool:
         """Envia notificação sobre uma violação confirmada."""
         ...

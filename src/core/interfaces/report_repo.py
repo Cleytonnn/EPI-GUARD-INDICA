@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
+
 from src.core.domain.violation import Violation
 
 
@@ -10,6 +11,6 @@ from src.core.domain.violation import Violation
 class IViolationReportRepository(Protocol):
     """Interface para persistência de relatórios estruturados de infrações (CSV, DB)."""
 
-    def log_violation(self, violation: Violation, image_path: Optional[str] = None) -> None:
+    def log_violation(self, violation: Violation, image_path: str | None = None) -> None:
         """Registra uma infração confirmada no relatório."""
         ...

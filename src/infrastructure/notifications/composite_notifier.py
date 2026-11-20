@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+
 from src.core.domain.violation import Violation
 from src.core.interfaces.notifier import INotifier
 from src.infrastructure.notifications.rate_limiter import RateLimiter
@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 class CompositeNotifier:
     """Orquestrador de múltiplos canais de notificação com rate limiting."""
 
-    def __init__(self, notifiers: Optional[List[INotifier]] = None, rate_limiter: Optional[RateLimiter] = None):
+    def __init__(self, notifiers: list[INotifier] | None = None, rate_limiter: RateLimiter | None = None):
         self.notifiers = notifiers or []
         self.rate_limiter = rate_limiter or RateLimiter(cooldown_seconds=60)
 
     def add_notifier(self, notifier: INotifier) -> None:
         self.notifiers.append(notifier)
 
-    def notify(self, violation: Violation, image_path: Optional[str] = None) -> bool:
+    def notify(self, violation: Violation, image_path: str | None = None) -> bool:
         """Dispara notificações para todos os canais se o rate limit permitir."""
         alert_key = violation.unique_key
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Optional
+
 from src.core.use_cases.process_batch import ProcessBatchUseCase
 
 logger = logging.getLogger(__name__)
@@ -39,8 +39,7 @@ class WatchDirectoryUseCase:
             while self._running:
                 videos = self.batch_uc.find_videos(dir_obj)
                 pending = [
-                    v for v in videos
-                    if not self.batch_uc.processed_repo.is_processed(v) and self._is_file_ready(v)
+                    v for v in videos if not self.batch_uc.processed_repo.is_processed(v) and self._is_file_ready(v)
                 ]
 
                 if pending:

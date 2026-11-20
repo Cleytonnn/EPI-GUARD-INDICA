@@ -5,6 +5,7 @@ from enum import Enum
 
 class PPEClass(str, Enum):
     """Classes de EPIs válidas no domínio."""
+
     HELMET = "helmet"
     GLOVES = "gloves"
     VEST = "vest"
@@ -37,6 +38,7 @@ class PPEClass(str, Enum):
 
 class ViolationClass(str, Enum):
     """Classes de ausência de EPIs (violações de segurança)."""
+
     NO_HELMET = "no_helmet"
     NO_GLOVES = "no_gloves"
     NO_BOOTS = "no_boots"

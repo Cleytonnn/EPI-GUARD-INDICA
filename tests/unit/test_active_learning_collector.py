@@ -124,4 +124,3 @@ def test_disabled_collector_does_nothing(tmp_path):
     dets = [Detection("no_helmet", 0.4, (10, 10, 40, 40), 1)]
     assert c.consider(_frame(1), dets, [], _meta(10)) is None
     assert not (tmp_path / "off").exists()
-

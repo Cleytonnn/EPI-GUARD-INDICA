@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+
 import cv2
 import numpy as np
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
@@ -24,6 +25,7 @@ router = APIRouter()
 def get_container() -> Container:
     """Dependency provider do container de injeção."""
     from src.presentation.api.app import app_container
+
     return app_container
 
 
@@ -88,7 +90,6 @@ def get_system_stats(container: Container = Depends(get_container)):
     }
 
 
-
 @router.post("/analyze/upload", response_model=FrameAnalysisResponse, tags=["Inferência"])
 async def analyze_file_upload(
     file: UploadFile = File(..., description="Arquivo de imagem (JPEG/PNG)"),
@@ -115,11 +116,13 @@ def analyze_base64_payload(
 
     try:
         raw_bytes = base64.b64decode(data_str)
-    except Exception:
-        raise HTTPException(status_code=400, detail="String Base64 inválida.")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="String Base64 inválida.") from exc
 
     frame = _decode_bytes_to_image(raw_bytes)
-    result = container.analyze_frame_uc.execute(frame, camera_id=payload.camera_id, check_compliance=payload.check_compliance)
+    result = container.analyze_frame_uc.execute(
+        frame, camera_id=payload.camera_id, check_compliance=payload.check_compliance
+    )
     return _to_response_dto(result)
 
 

@@ -14,11 +14,11 @@ Classe pura de domínio: sem dependências de IA/visão computacional.
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Hashable, Optional, Tuple
 
-Box = Tuple[int, int, int, int]
+Box = tuple[int, int, int, int]
 
 
 class PPEState(str, Enum):
@@ -33,7 +33,7 @@ class _Track:
     state: PPEState = PPEState.UNKNOWN
     observations: int = 1
     last_seen: int = 0
-    box: Optional[Tuple[float, float, float, float]] = None
+    box: tuple[float, float, float, float] | None = None
 
 
 class PPEStateSmoother:
@@ -58,7 +58,7 @@ class PPEStateSmoother:
         self.min_observations = max(1, min_observations)
         self.box_alpha = box_alpha
         self.max_age = max_age
-        self._tracks: Dict[Hashable, _Track] = {}
+        self._tracks: dict[Hashable, _Track] = {}
         self._frame = 0
 
     def begin_frame(self) -> None:
@@ -68,7 +68,7 @@ class PPEStateSmoother:
         for key in stale:
             del self._tracks[key]
 
-    def update(self, key: Hashable, observation: float, box: Optional[Box] = None) -> Tuple[PPEState, float, Optional[Box]]:
+    def update(self, key: Hashable, observation: float, box: Box | None = None) -> tuple[PPEState, float, Box | None]:
         """Atualiza a evidência (0 = ausente, 1 = presente) e devolve (estado, score, caixa suavizada)."""
         observation = min(1.0, max(0.0, float(observation)))
         track = self._tracks.get(key)
@@ -85,7 +85,7 @@ class PPEStateSmoother:
                 track.box = tuple(float(v) for v in box)
             else:
                 a = self.box_alpha
-                track.box = tuple(a * n + (1.0 - a) * o for n, o in zip(box, track.box))
+                track.box = tuple(a * n + (1.0 - a) * o for n, o in zip(box, track.box, strict=True))
 
         if track.observations >= self.min_observations:
             if track.ema >= self.present_on:

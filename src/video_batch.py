@@ -9,22 +9,20 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from src.container import Container
 from src.core.domain.vehicle_metadata import VehicleMetadata
-from src.infrastructure.video.universal_reader import UniversalVideoReader
-from src.infrastructure.repositories.json_processed_repo import JsonProcessedVideosRepository as ProcessedVideosDB
 from src.presentation.cli.commands import (
     run_batch_command,
-    run_watch_command,
     run_single_file_command,
+    run_watch_command,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def extract_metadata_from_path(video_path: Path | str, root_dir: Optional[Path | str] = None) -> Dict[str, str]:
+def extract_metadata_from_path(video_path: Path | str, root_dir: Path | str | None = None) -> dict[str, str]:
     """Função utilitária retrocompatível para extração de metadados."""
     meta = VehicleMetadata.from_path(video_path, root_dir)
     return {
@@ -39,15 +37,16 @@ class VideoBatchProcessor:
 
     def __init__(
         self,
-        input_dir: Optional[str] = None,
-        config_path: Optional[str] = None,
-        skip_frames: Optional[int] = None,
+        input_dir: str | None = None,
+        config_path: str | None = None,
+        skip_frames: int | None = None,
         show_window: bool = False,
-        report_csv: Optional[str] = None,
-        processed_db: Optional[str] = None,
+        report_csv: str | None = None,
+        processed_db: str | None = None,
         force_reprocess: bool = False,
     ):
         from src.config.settings import AppSettings
+
         settings = AppSettings.load(config_path)
 
         if input_dir:
@@ -78,10 +77,10 @@ class VideoBatchProcessor:
                 "input_dir": settings.video_batch.input_dir,
                 "skip_frames": settings.video_batch.skip_frames,
                 "watch_interval": settings.video_batch.watch_interval,
-            }
+            },
         }
 
-    def process_video(self, video_path: Path | str) -> Dict[str, Any]:
+    def process_video(self, video_path: Path | str) -> dict[str, Any]:
         result = self.container.process_video_file_uc.execute(
             video_path=video_path,
             root_dir=self.input_dir,
@@ -98,7 +97,7 @@ class VideoBatchProcessor:
             "violations": result.violations,
         }
 
-    def process_all_pending(self) -> List[Dict[str, Any]]:
+    def process_all_pending(self) -> list[dict[str, Any]]:
         results = self.container.process_batch_uc.execute(
             input_dir=self.input_dir,
             skip_frames=self.skip_frames,
@@ -118,7 +117,7 @@ class VideoBatchProcessor:
             for r in results
         ]
 
-    def watch_directory(self, interval_seconds: Optional[int] = None) -> None:
+    def watch_directory(self, interval_seconds: int | None = None) -> None:
         interval = interval_seconds or self.container.settings.video_batch.watch_interval
         self.container.watch_directory_uc.execute(
             input_dir=self.input_dir,
@@ -161,7 +160,9 @@ def main():
     if args.file:
         run_single_file_command(processor.container, args.file, skip_frames=args.skip_frames)
     elif args.watch:
-        run_watch_command(processor.container, input_dir=args.dir, interval_seconds=args.interval, skip_frames=args.skip_frames)
+        run_watch_command(
+            processor.container, input_dir=args.dir, interval_seconds=args.interval, skip_frames=args.skip_frames
+        )
     else:
         run_batch_command(processor.container, input_dir=args.dir, skip_frames=args.skip_frames, force=args.force)
 

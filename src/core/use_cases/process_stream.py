@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Callable, Optional
-import cv2
-import numpy as np
 
-from src.core.interfaces.detector import IDetector
+import cv2
+
 from src.core.interfaces.alert_storage import IAlertStorage
+from src.core.interfaces.detector import IDetector
 from src.core.interfaces.notifier import INotifier
 from src.core.interfaces.training_collector import ITrainingSampleCollector
 from src.core.services.compliance_service import ComplianceService
@@ -32,8 +31,8 @@ class ProcessLiveStreamUseCase:
         detector: IDetector,
         compliance_service: ComplianceService,
         alert_storage: IAlertStorage,
-        notifier: Optional[INotifier] = None,
-        training_collector: Optional[ITrainingSampleCollector] = None,
+        notifier: INotifier | None = None,
+        training_collector: ITrainingSampleCollector | None = None,
     ):
         self.detector = detector
         self.compliance_service = compliance_service
@@ -109,9 +108,7 @@ class ProcessLiveStreamUseCase:
                     )
 
                     if violations:
-                        display_frame = draw_violation_warning(
-                            display_frame, violations[0].description
-                        )
+                        display_frame = draw_violation_warning(display_frame, violations[0].description)
 
                     cv2.imshow(window_name, display_frame)
                     key = cv2.waitKey(1) & 0xFF

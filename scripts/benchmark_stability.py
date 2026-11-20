@@ -22,10 +22,14 @@ from src.container import Container  # noqa: E402
 from src.infrastructure.video.universal_reader import UniversalVideoReader  # noqa: E402
 
 TRACKED = {
-    "helmet": "helmet", "no_helmet": "helmet",
-    "gloves": "gloves", "no_gloves": "gloves",
-    "vest": "vest", "no_vest": "vest",
-    "uniform_rf": "uniform_rf", "no_uniform_rf": "uniform_rf",
+    "helmet": "helmet",
+    "no_helmet": "helmet",
+    "gloves": "gloves",
+    "no_gloves": "gloves",
+    "vest": "vest",
+    "no_vest": "vest",
+    "uniform_rf": "uniform_rf",
+    "no_uniform_rf": "uniform_rf",
 }
 
 
@@ -52,7 +56,7 @@ def run(video: str, backend: str, frames: int, step: int) -> dict:
             history[(det.track_id, item)].append(1 if det.class_name.startswith("no_") else 0)
     reader.release()
 
-    flips = sum(sum(1 for a, b in zip(h, h[1:]) if a != b) for h in history.values())
+    flips = sum(sum(1 for a, b in zip(h, h[1:], strict=False) if a != b) for h in history.values())
     samples = sum(len(h) for h in history.values())
     absent = sum(sum(h) for h in history.values())
     return {

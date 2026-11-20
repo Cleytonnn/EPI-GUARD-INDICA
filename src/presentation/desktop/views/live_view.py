@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Optional
-import cv2
+
 import customtkinter as ctk
+import cv2
 
 from src.container import Container
 from src.presentation.cli.visualizer import draw_detections
@@ -23,7 +23,6 @@ from src.presentation.desktop.theme import (
     FONT_BODY_BOLD,
     FONT_SMALL,
     FONT_TITLE,
-    TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
@@ -39,7 +38,7 @@ class LiveView(ctk.CTkFrame):
 
         self.is_streaming: bool = False
         self.stop_requested: bool = False
-        self._cap: Optional[cv2.VideoCapture] = None
+        self._cap: cv2.VideoCapture | None = None
 
         self._build_ui()
 

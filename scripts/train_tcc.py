@@ -102,10 +102,18 @@ def main() -> None:
         t0 = time.time()
         best = train_model(data_yaml, cfg, resume=args.resume)
         minutes = (time.time() - t0) / 60.0
-        report = evaluate_model(best, data_yaml, split="test", imgsz=args.imgsz, device=args.device, train_minutes=minutes)
+        report = evaluate_model(
+            best, data_yaml, split="test", imgsz=args.imgsz, device=args.device, train_minutes=minutes
+        )
         reports.append(report)
-        logger.info("📊 %s -> P=%.3f R=%.3f F1=%.3f mAP50=%.3f", report.model, report.precision,
-                    report.recall, report.f1, report.map50)
+        logger.info(
+            "📊 %s -> P=%.3f R=%.3f F1=%.3f mAP50=%.3f",
+            report.model,
+            report.precision,
+            report.recall,
+            report.f1,
+            report.map50,
+        )
         if best_overall is None or report.map50 > best_overall[1]:
             best_overall = (best, report.map50)
 

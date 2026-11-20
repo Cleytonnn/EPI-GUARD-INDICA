@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import time
-from typing import List, Tuple
+
 import cv2
 import numpy as np
+
 from src.core.domain.detection import Detection
 
 COLOR_GREEN = (0, 200, 0)
@@ -20,14 +21,14 @@ class FPSCounter:
 
     def __init__(self, avg_window: int = 30):
         self._avg_window = avg_window
-        self._times: List[float] = []
+        self._times: list[float] = []
         self._fps: float = 0.0
 
     def update(self) -> float:
         now = time.time()
         self._times.append(now)
         if len(self._times) > self._avg_window:
-            self._times = self._times[-self._avg_window:]
+            self._times = self._times[-self._avg_window :]
 
         if len(self._times) >= 2:
             elapsed = self._times[-1] - self._times[0]
@@ -44,6 +45,7 @@ class FPSCounter:
 def _ascii_label(text: str) -> str:
     """Remove acentos e emojis incompatíveis com cv2.putText (evita '?' nas caixas)."""
     import unicodedata
+
     norm = unicodedata.normalize("NFKD", text)
     ascii_only = norm.encode("ascii", "ignore").decode("ascii")
     return " ".join(ascii_only.split())
@@ -51,12 +53,12 @@ def _ascii_label(text: str) -> str:
 
 def draw_detections(
     frame: np.ndarray,
-    detections: List[Detection],
+    detections: list[Detection],
     bbox_thickness: int = 2,
 ) -> np.ndarray:
     """Desenha caixas delimitadoras e rótulos das detecções no frame."""
     annotated = frame.copy()
-    placed_labels: List[Tuple[int, int, int, int]] = []
+    placed_labels: list[tuple[int, int, int, int]] = []
 
     for det in detections:
         if det.class_name == "civil":
@@ -92,8 +94,7 @@ def draw_detections(
         # Evita sobreposição vertical quando dois rótulos coincidem na mesma posição
         for _ in range(5):
             overlap = any(
-                not (lx2 < px1 or x1 > px2 or label_y2 < py1 or label_y1 > py2)
-                for px1, py1, px2, py2 in placed_labels
+                not (lx2 < px1 or x1 > px2 or label_y2 < py1 or label_y1 > py2) for px1, py1, px2, py2 in placed_labels
             )
             if not overlap:
                 break
@@ -213,4 +214,3 @@ def draw_violation_warning(frame: np.ndarray, violation_text: str) -> np.ndarray
         cv2.LINE_AA,
     )
     return annotated
-

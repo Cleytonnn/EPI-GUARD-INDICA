@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+
 import numpy as np
 import torch
 from ultralytics import YOLO
@@ -39,9 +39,11 @@ class YOLODetector(IDetector):
         logger.info(f"🤖 Carregando modelo YOLO em [{self.device.upper()}]: {self.model_path}")
         self.model = YOLO(self.model_path)
         self._class_names = self.model.names
-        logger.info(f"🤖 Modelo carregado com sucesso. Classes ({len(self._class_names)}): {list(self._class_names.values())}")
+        logger.info(
+            f"🤖 Modelo carregado com sucesso. Classes ({len(self._class_names)}): {list(self._class_names.values())}"
+        )
 
-    def detect(self, frame: np.ndarray, skip_frames: int = 1) -> List[Detection]:
+    def detect(self, frame: np.ndarray, skip_frames: int = 1) -> list[Detection]:
         """Executa a inferência ou tracking no frame fornecido."""
         if frame is None or frame.size == 0:
             return []
@@ -75,23 +77,25 @@ class YOLODetector(IDetector):
             if boxes is None or len(boxes) == 0:
                 return []
 
-            detections: List[Detection] = []
+            detections: list[Detection] = []
             for box in boxes:
                 coords = box.xyxy[0].cpu().numpy().astype(int)
                 conf = float(box.conf[0].cpu().numpy())
                 cls_id = int(box.cls[0].cpu().numpy())
                 class_name = self._class_names.get(cls_id, f"class_{cls_id}")
 
-                track_id: Optional[int] = None
+                track_id: int | None = None
                 if box.id is not None:
                     track_id = int(box.id[0].cpu().numpy())
 
-                detections.append(Detection(
-                    class_name=class_name,
-                    confidence=round(conf, 3),
-                    bbox=(int(coords[0]), int(coords[1]), int(coords[2]), int(coords[3])),
-                    track_id=track_id,
-                ))
+                detections.append(
+                    Detection(
+                        class_name=class_name,
+                        confidence=round(conf, 3),
+                        bbox=(int(coords[0]), int(coords[1]), int(coords[2]), int(coords[3])),
+                        track_id=track_id,
+                    )
+                )
 
             return detections
 
@@ -118,5 +122,5 @@ class YOLODetector(IDetector):
         self._confidence = float(value)
 
     @property
-    def class_names(self) -> Dict[int, str]:
+    def class_names(self) -> dict[int, str]:
         return self._class_names

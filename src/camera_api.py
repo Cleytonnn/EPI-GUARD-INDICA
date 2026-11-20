@@ -15,8 +15,10 @@ from src.container import Container
 from src.core.services.compliance_service import ComplianceService
 from src.infrastructure.cctv.camera_api_client import (
     CameraAPIClient,
-    RemoteCameraConfig as CameraConfig,
     load_cameras_config,
+)
+from src.infrastructure.cctv.camera_api_client import (
+    RemoteCameraConfig as CameraConfig,
 )
 
 logger = logging.getLogger(__name__)

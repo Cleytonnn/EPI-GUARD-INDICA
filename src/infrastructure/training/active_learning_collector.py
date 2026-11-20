@@ -33,7 +33,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 import cv2
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 # Classes do dataset de treino (a ordem define o índice no arquivo YOLO .txt).
 # "vest"/"no_vest" ficam de fora pois o detector atual as emite duplicadas de uniform_rf.
-TRAINING_CLASSES: List[str] = [
+TRAINING_CLASSES: list[str] = [
     "Person",
     "civil",
     "helmet",
@@ -58,10 +58,10 @@ TRAINING_CLASSES: List[str] = [
     "gloves",
     "no_gloves",
 ]
-CLASS_INDEX: Dict[str, int] = {name: i for i, name in enumerate(TRAINING_CLASSES)}
+CLASS_INDEX: dict[str, int] = {name: i for i, name in enumerate(TRAINING_CLASSES)}
 
 # Inversão usada quando o revisor marca "Falso alarme" (a pessoa ESTAVA com o EPI)
-FLIP_VIOLATION: Dict[str, str] = {
+FLIP_VIOLATION: dict[str, str] = {
     "no_helmet": "helmet",
     "no_uniform_rf": "uniform_rf",
     "no_gloves": "gloves",
@@ -78,11 +78,12 @@ REVIEW_ACTIONS = ("correto", "falso_alarme", "civil", "descartar")
 @dataclass
 class _SessionState:
     """Estado de coleta por vídeo/câmera."""
+
     name: str = "sessao"
     saved: int = 0
     considered: int = 0
-    last_saved_frame: Optional[int] = None
-    recent_hashes: Deque[int] = field(default_factory=lambda: deque(maxlen=60))
+    last_saved_frame: int | None = None
+    recent_hashes: deque[int] = field(default_factory=lambda: deque(maxlen=60))
 
 
 class ActiveLearningCollector(ITrainingSampleCollector):
@@ -100,7 +101,7 @@ class ActiveLearningCollector(ITrainingSampleCollector):
         max_pending: int = 5000,
         dedup_threshold: int = 6,
         image_quality: int = 95,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ):
         self.output_dir = Path(output_dir)
         self.enabled = enabled
@@ -116,7 +117,7 @@ class ActiveLearningCollector(ITrainingSampleCollector):
         self._rng = random.Random(seed)
         self._lock = threading.Lock()
         self._session = _SessionState()
-        self._pending_count: Optional[int] = None
+        self._pending_count: int | None = None
 
         if self.enabled:
             self._ensure_dirs()
@@ -131,10 +132,10 @@ class ActiveLearningCollector(ITrainingSampleCollector):
     def consider(
         self,
         frame: np.ndarray,
-        detections: List[Detection],
-        violations: Optional[List[Violation]] = None,
-        metadata: Optional[VehicleMetadata] = None,
-    ) -> Optional[str]:
+        detections: list[Detection],
+        violations: list[Violation] | None = None,
+        metadata: VehicleMetadata | None = None,
+    ) -> str | None:
         if not self.enabled or frame is None or frame.size == 0:
             return None
 
@@ -181,10 +182,10 @@ class ActiveLearningCollector(ITrainingSampleCollector):
 
     def _selection_reasons(
         self,
-        detections: List[Detection],
-        violations: Optional[List[Violation]],
-    ) -> List[str]:
-        reasons: List[str] = []
+        detections: list[Detection],
+        violations: list[Violation] | None,
+    ) -> list[str]:
+        reasons: list[str] = []
         relevant = [d for d in detections if d.class_name in CLASS_INDEX]
         if violations:
             reasons.append("violacao")
@@ -197,12 +198,12 @@ class ActiveLearningCollector(ITrainingSampleCollector):
     def _save_sample(
         self,
         frame: np.ndarray,
-        detections: List[Detection],
-        violations: Optional[List[Violation]],
-        metadata: Optional[VehicleMetadata],
-        reasons: List[str],
+        detections: list[Detection],
+        violations: list[Violation] | None,
+        metadata: VehicleMetadata | None,
+        reasons: list[str],
         frame_idx: int,
-    ) -> Optional[str]:
+    ) -> str | None:
         source = (metadata.video_name if metadata else None) or self._session.name
         stem = self._slug(Path(source).stem)[:40] or "amostra"
         sample_id = f"{stem}_{int(frame_idx):07d}_{uuid4().hex[:6]}"
@@ -228,7 +229,7 @@ class ActiveLearningCollector(ITrainingSampleCollector):
             if d.class_name in CLASS_INDEX
         ]
 
-        meta: Dict[str, Any] = {
+        meta: dict[str, Any] = {
             "id": sample_id,
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "source": source,
@@ -251,7 +252,7 @@ class ActiveLearningCollector(ITrainingSampleCollector):
     # ------------------------------------------------------------------
     # Revisão humana
     # ------------------------------------------------------------------
-    def list_samples(self, status: str = STATUS_PENDING, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def list_samples(self, status: str = STATUS_PENDING, limit: int | None = None) -> list[dict[str, Any]]:
         """Lista amostras (metadados) de um status, mais recentes primeiro."""
         folder = self.output_dir / status
         if not folder.exists():
@@ -293,17 +294,13 @@ class ActiveLearningCollector(ITrainingSampleCollector):
                 raise FileNotFoundError(f"Amostra pendente não encontrada: {sample_id}")
 
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            dets: List[Dict[str, Any]] = meta.get("detections", [])
+            dets: list[dict[str, Any]] = meta.get("detections", [])
 
             if action == "falso_alarme":
                 for d in dets:
                     d["class_name"] = FLIP_VIOLATION.get(d["class_name"], d["class_name"])
             elif action == "civil":
-                dets = [
-                    {**d, "class_name": "civil"}
-                    for d in dets
-                    if d["class_name"] in ("Person", "civil")
-                ]
+                dets = [{**d, "class_name": "civil"} for d in dets if d["class_name"] in ("Person", "civil")]
 
             meta["detections"] = dets
             meta["review"] = {"action": action, "at": datetime.now().isoformat(timespec="seconds")}
@@ -326,7 +323,7 @@ class ActiveLearningCollector(ITrainingSampleCollector):
                 self._pending_count = max(0, self._pending_count - 1)
             return dest_status
 
-    def stats(self) -> Dict[str, int]:
+    def stats(self) -> dict[str, int]:
         """Quantidade de amostras por status."""
         return {
             s: len(list((self.output_dir / s).glob("*.json"))) if (self.output_dir / s).exists() else 0
@@ -336,7 +333,7 @@ class ActiveLearningCollector(ITrainingSampleCollector):
     # ------------------------------------------------------------------
     # Exportação para treino
     # ------------------------------------------------------------------
-    def export_dataset(self, dest_dir: str | Path = "datasets/epi_ativo", val_ratio: float = 0.2) -> Dict[str, Any]:
+    def export_dataset(self, dest_dir: str | Path = "datasets/epi_ativo", val_ratio: float = 0.2) -> dict[str, Any]:
         """Monta um dataset YOLO (train/val) a partir das amostras aprovadas.
 
         A divisão é feita por VÍDEO de origem (e não por frame) para evitar que
@@ -405,7 +402,7 @@ class ActiveLearningCollector(ITrainingSampleCollector):
         return self._pending_count
 
     @staticmethod
-    def _to_yolo(dets: List[Dict[str, Any]], width: int, height: int) -> str:
+    def _to_yolo(dets: list[dict[str, Any]], width: int, height: int) -> str:
         width = max(1, int(width))
         height = max(1, int(height))
         lines = []
@@ -441,4 +438,3 @@ class ActiveLearningCollector(ITrainingSampleCollector):
     @staticmethod
     def _slug(text: str) -> str:
         return re.sub(r"[^A-Za-z0-9_-]+", "_", text).strip("_")
-

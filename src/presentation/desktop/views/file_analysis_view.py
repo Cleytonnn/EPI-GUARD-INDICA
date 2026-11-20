@@ -3,20 +3,17 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
-import subprocess
 import threading
 import time
-from typing import Any, List, Optional
+from pathlib import Path
+
 import customtkinter as ctk
 
 from src.container import Container
 from src.core.domain.vehicle_metadata import VehicleMetadata
-from src.core.use_cases.process_video_file import VideoProcessingResult
 from src.presentation.desktop.theme import (
     BG_CARD,
     BG_INPUT,
-    BG_MAIN,
     BORDER_COLOR,
     COLOR_ACCENT,
     COLOR_DANGER,
@@ -25,9 +22,7 @@ from src.presentation.desktop.theme import (
     COLOR_WARNING,
     FONT_BODY,
     FONT_BODY_BOLD,
-    FONT_HEADING,
     FONT_SMALL,
-    FONT_SUBTITLE,
     FONT_TITLE,
     TEXT_MUTED,
     TEXT_PRIMARY,
@@ -44,10 +39,10 @@ class FileAnalysisView(ctk.CTkFrame):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.container = container
 
-        self.selected_file: Optional[str] = None
+        self.selected_file: str | None = None
         self.is_processing: bool = False
         self.stop_requested: bool = False
-        self._current_metadata: Optional[VehicleMetadata] = None
+        self._current_metadata: VehicleMetadata | None = None
 
         self._build_ui()
 
@@ -360,7 +355,7 @@ class FileAnalysisView(ctk.CTkFrame):
         self.date_entry.insert(0, meta.record_date)
 
         self.progress_label.configure(
-            text=f"Pronto para analisar: {path_obj.name} (Tamanho: {path_obj.stat().st_size / (1024*1024):.1f} MB)",
+            text=f"Pronto para analisar: {path_obj.name} (Tamanho: {path_obj.stat().st_size / (1024 * 1024):.1f} MB)",
             text_color=COLOR_SUCCESS,
         )
         self._clear_violations_list()
@@ -456,7 +451,6 @@ class FileAnalysisView(ctk.CTkFrame):
                 collector.start_session(metadata.video_name)
 
             skip_frames = self.container.settings.detection.skip_frames or 2
-            consecutive_target = self.container.settings.compliance.min_violation_frames
 
             while not self.stop_requested:
                 ret, frame = reader.read()
@@ -587,7 +581,7 @@ class FileAnalysisView(ctk.CTkFrame):
             msg = f"⚠️ Concluído em {elapsed:.1f}s ({total_frames} frames). {total_viols} infração(ões) registrada(s)."
             self.progress_label.configure(text=msg, text_color=COLOR_DANGER)
             self.summary_label.configure(
-                text=f"Evidências visuais gravadas na pasta de alertas.",
+                text="Evidências visuais gravadas na pasta de alertas.",
                 text_color=TEXT_SECONDARY,
             )
         else:
@@ -634,6 +628,7 @@ class FileAnalysisView(ctk.CTkFrame):
             return
 
         from src.infrastructure.video.vlc_service import VLCService
+
         if not VLCService.is_available():
             self.progress_label.configure(
                 text="⚠️ VLC não localizado no sistema. Instale via winget install VideoLAN.VLC",
@@ -658,6 +653,7 @@ class FileAnalysisView(ctk.CTkFrame):
             return
 
         from src.infrastructure.video.vlc_service import VLCService
+
         if not VLCService.is_available():
             self.progress_label.configure(
                 text="⚠️ VLC não localizado no sistema.",

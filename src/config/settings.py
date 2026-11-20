@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+
 import yaml
 from dotenv import load_dotenv
 
@@ -20,6 +20,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 @dataclass
 class CameraConfig:
     """Configurações de fonte de vídeo e captura em tempo real."""
+
     source: str | int = 0
     width: int = 1280
     height: int = 720
@@ -30,6 +31,7 @@ class CameraConfig:
 @dataclass
 class DetectionConfig:
     """Configurações do modelo de detecção de EPI."""
+
     backend: str = "hybrid"  # "hybrid" (Pose + YOLOv8 de EPIs), "pose" (apenas heurística) ou "yolo"
     model_path: str = "yolov8n-pose.pt"
     confidence: float = 0.25
@@ -41,36 +43,34 @@ class DetectionConfig:
     ppe_model_path: str = "models/epi_best.pt"
     ppe_confidence: float = 0.25
     ppe_imgsz: int = 640
-    crop_padding: float = 0.18       # enquadramento: folga ao redor da pessoa no recorte
-    smoothing_alpha: float = 0.35    # EMA da evidência por EPI
+    crop_padding: float = 0.18  # enquadramento: folga ao redor da pessoa no recorte
+    smoothing_alpha: float = 0.35  # EMA da evidência por EPI
     present_threshold: float = 0.55  # histerese: limiar para declarar "presente"
-    absent_threshold: float = 0.33   # histerese: limiar para declarar "ausente"
-    smoothing_min_obs: int = 3       # observações mínimas antes de decidir
+    absent_threshold: float = 0.33  # histerese: limiar para declarar "ausente"
+    smoothing_min_obs: int = 3  # observações mínimas antes de decidir
 
 
 @dataclass
 class ComplianceConfig:
     """Configurações das regras de conformidade de EPI."""
+
     min_violation_frames: int = 5
-    required_ppe: List[str] = field(default_factory=lambda: [
-        "helmet", "gloves", "goggles", "vest", "boots"
-    ])
-    violation_classes: List[str] = field(default_factory=lambda: [
-        "no_helmet", "no_gloves", "no_boots", "no_goggle"
-    ])
+    required_ppe: list[str] = field(default_factory=lambda: ["helmet", "gloves", "goggles", "vest", "boots"])
+    violation_classes: list[str] = field(default_factory=lambda: ["no_helmet", "no_gloves", "no_boots", "no_goggle"])
 
 
 @dataclass
 class AlertConfig:
     """Configurações do sistema de alertas e notificações."""
+
     save_images: bool = True
     save_dir: str = "alertas"
     send_email: bool = False
     cooldown_seconds: int = 60
     image_quality: int = 85
-    email_sender: Optional[str] = None
-    email_password: Optional[str] = None
-    email_receiver: Optional[str] = None
+    email_sender: str | None = None
+    email_password: str | None = None
+    email_receiver: str | None = None
     smtp_server: str = "smtp.gmail.com"
     smtp_port: int = 587
 
@@ -78,6 +78,7 @@ class AlertConfig:
 @dataclass
 class DisplayConfig:
     """Configurações da janela de exibição."""
+
     show_window: bool = True
     window_name: str = "Detecção de EPI - Ao Vivo"
     show_fps: bool = True
@@ -87,10 +88,9 @@ class DisplayConfig:
 @dataclass
 class VideoBatchConfig:
     """Configurações do processamento de arquivos em lote e watcher."""
+
     input_dir: str = "gravacoes"
-    file_extensions: List[str] = field(default_factory=lambda: [
-        ".265", ".h265", ".hevc", ".mp4", ".avi", ".mkv"
-    ])
+    file_extensions: list[str] = field(default_factory=lambda: [".265", ".h265", ".hevc", ".mp4", ".avi", ".mkv"])
     skip_frames: int = 3
     report_csv: str = "relatorio_infracoes.csv"
     processed_db: str = "videos_processados.json"
@@ -100,6 +100,7 @@ class VideoBatchConfig:
 @dataclass
 class ActiveLearningConfig:
     """Configurações da coleta automática de frames para retreino (Aprendizado Ativo)."""
+
     enabled: bool = True
     output_dir: str = "datasets/coleta_ativa"
     uncertain_min: float = 0.30
@@ -114,14 +115,16 @@ class ActiveLearningConfig:
 @dataclass
 class ApiConfig:
     """Configurações da API REST."""
+
     host: str = "0.0.0.0"
     port: int = 8000
-    cors_origins: List[str] = field(default_factory=lambda: ["*"])
+    cors_origins: list[str] = field(default_factory=lambda: ["*"])
 
 
 @dataclass
 class AppSettings:
     """Configuração global consolidada da aplicação."""
+
     camera: CameraConfig = field(default_factory=CameraConfig)
     detection: DetectionConfig = field(default_factory=DetectionConfig)
     compliance: ComplianceConfig = field(default_factory=ComplianceConfig)
@@ -132,7 +135,7 @@ class AppSettings:
     active_learning: ActiveLearningConfig = field(default_factory=ActiveLearningConfig)
 
     @classmethod
-    def load(cls, config_path: Optional[str | Path] = None) -> AppSettings:
+    def load(cls, config_path: str | Path | None = None) -> AppSettings:
         """Carrega e mescla settings.yaml com variáveis de ambiente."""
         load_dotenv()
 
@@ -143,7 +146,7 @@ class AppSettings:
         path_obj = Path(config_path)
         if path_obj.exists():
             try:
-                with open(path_obj, "r", encoding="utf-8") as f:
+                with open(path_obj, encoding="utf-8") as f:
                     raw_data = yaml.safe_load(f) or {}
             except Exception:
                 raw_data = {}

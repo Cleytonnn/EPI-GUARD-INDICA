@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from typing import List, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
+
 import numpy as np
+
 from src.core.domain.detection import Detection
 
 
@@ -11,7 +13,7 @@ from src.core.domain.detection import Detection
 class IDetector(Protocol):
     """Interface abstrata para detectores de visão computacional."""
 
-    def detect(self, frame: np.ndarray, skip_frames: int = 1) -> List[Detection]:
+    def detect(self, frame: np.ndarray, skip_frames: int = 1) -> list[Detection]:
         """Processa um frame e retorna lista de detecções."""
         ...
 

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+
 import cv2
 import numpy as np
+
 from src.core.domain.violation import Violation
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ class FileAlertStorage:
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self._images_saved_count = 0
 
-    def save_image(self, frame: np.ndarray, violation: Violation) -> Optional[str]:
+    def save_image(self, frame: np.ndarray, violation: Violation) -> str | None:
         """Salva a imagem no disco em subpastas ou na raiz de alertas."""
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

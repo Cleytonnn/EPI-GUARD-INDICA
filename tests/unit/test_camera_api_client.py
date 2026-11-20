@@ -86,4 +86,3 @@ def test_camera_api_client_processes_snapshot():
     assert detector.detect.called
     assert alert_storage.save_image.called
     assert notifier.notify.called
-

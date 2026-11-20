@@ -2,21 +2,23 @@
 
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass
-from typing import Optional, Tuple
-from src.core.domain.ppe_type import ViolationClass, PPEClass
+
+from src.core.domain.ppe_type import PPEClass, ViolationClass
 
 
 @dataclass(frozen=True)
 class BoundingBox:
     """Coordenadas retangulares da detecção (x1, y1, x2, y2)."""
+
     x1: int
     y1: int
     x2: int
     y2: int
 
     @property
-    def tuple(self) -> Tuple[int, int, int, int]:
+    def tuple(self) -> builtins.tuple[int, int, int, int]:
         return (self.x1, self.y1, self.x2, self.y2)
 
     @property
@@ -35,10 +37,11 @@ class BoundingBox:
 @dataclass
 class Detection:
     """Entidade que representa uma detecção efetuada pelo modelo de IA."""
+
     class_name: str
     confidence: float
-    bbox: Tuple[int, int, int, int]
-    track_id: Optional[int] = None
+    bbox: tuple[int, int, int, int]
+    track_id: int | None = None
 
     @property
     def is_violation(self) -> bool:

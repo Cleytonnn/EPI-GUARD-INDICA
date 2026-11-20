@@ -10,8 +10,7 @@ from datetime import datetime
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from pathlib import Path
-from typing import Optional
+
 from src.core.domain.violation import Violation
 
 logger = logging.getLogger(__name__)
@@ -22,9 +21,9 @@ class EmailNotifier:
 
     def __init__(
         self,
-        sender: Optional[str] = None,
-        password: Optional[str] = None,
-        receiver: Optional[str] = None,
+        sender: str | None = None,
+        password: str | None = None,
+        receiver: str | None = None,
         smtp_server: str = "smtp.gmail.com",
         smtp_port: int = 587,
         enabled: bool = True,
@@ -40,7 +39,7 @@ class EmailNotifier:
         if not self.enabled:
             logger.debug("ℹ️ Notificador de e-mail desabilitado ou sem credenciais completas.")
 
-    def notify(self, violation: Violation, image_path: Optional[str] = None) -> bool:
+    def notify(self, violation: Violation, image_path: str | None = None) -> bool:
         """Envia o e-mail de alerta em uma thread separada para não travar a pipeline."""
         if not self.enabled:
             return False
@@ -53,7 +52,7 @@ class EmailNotifier:
         thread.start()
         return True
 
-    def _send_sync(self, violation: Violation, image_path: Optional[str]) -> bool:
+    def _send_sync(self, violation: Violation, image_path: str | None) -> bool:
         """Execução síncrona do envio SMTP."""
         try:
             msg = MIMEMultipart()
@@ -80,16 +79,18 @@ class EmailNotifier:
                 if meta.video_time_str:
                     lines.append(f"Tempo no Vídeo: {meta.video_time_str}")
 
-            lines.extend([
-                f"Data/Hora Processamento: {timestamp}",
-                f"Confiança: {violation.confidence:.1%}",
-                f"ID do Trabalhador: {violation.track_id or 'N/A'}",
-                f"Frames Consecutivos: {violation.consecutive_frames}",
-                "",
-                "A evidência fotográfica com as marcações está em anexo.",
-                "---",
-                "Sistema de Detecção de EPI - Arquitetura Limpa",
-            ])
+            lines.extend(
+                [
+                    f"Data/Hora Processamento: {timestamp}",
+                    f"Confiança: {violation.confidence:.1%}",
+                    f"ID do Trabalhador: {violation.track_id or 'N/A'}",
+                    f"Frames Consecutivos: {violation.consecutive_frames}",
+                    "",
+                    "A evidência fotográfica com as marcações está em anexo.",
+                    "---",
+                    "Sistema de Detecção de EPI - Arquitetura Limpa",
+                ]
+            )
 
             body = "\n".join(lines)
             msg.attach(MIMEText(body, "plain", "utf-8"))

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -13,10 +13,10 @@ from src.presentation.api.routes import router
 logger = logging.getLogger(__name__)
 
 # Container singleton global para a API
-app_container: Optional[Container] = None
+app_container: Container | None = None
 
 
-def create_app(container: Optional[Container] = None) -> FastAPI:
+def create_app(container: Container | None = None) -> FastAPI:
     """Cria e configura a instância do FastAPI com injeção de dependências."""
     global app_container
     app_container = container or Container()

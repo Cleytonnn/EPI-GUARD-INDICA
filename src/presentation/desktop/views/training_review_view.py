@@ -10,10 +10,10 @@ from __future__ import annotations
 import os
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-import cv2
 import customtkinter as ctk
+import cv2
 from PIL import Image, ImageTk
 
 from src.container import Container
@@ -56,10 +56,10 @@ class TrainingReviewView(ctk.CTkFrame):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.container = container
         self.collector = container.training_collector
-        self.samples: List[Dict[str, Any]] = []
-        self.current: Optional[Dict[str, Any]] = None
-        self._photo: Optional[ImageTk.PhotoImage] = None
-        self._list_buttons: Dict[str, ctk.CTkButton] = {}
+        self.samples: list[dict[str, Any]] = []
+        self.current: dict[str, Any] | None = None
+        self._photo: ImageTk.PhotoImage | None = None
+        self._list_buttons: dict[str, ctk.CTkButton] = {}
 
         self._build_ui()
         self._bind_shortcuts()
@@ -74,7 +74,9 @@ class TrainingReviewView(ctk.CTkFrame):
 
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", padx=20, pady=(15, 10))
-        ctk.CTkLabel(header, text="🧠 Revisão para Treino da IA", font=FONT_TITLE, text_color=TEXT_PRIMARY).pack(anchor="w")
+        ctk.CTkLabel(header, text="🧠 Revisão para Treino da IA", font=FONT_TITLE, text_color=TEXT_PRIMARY).pack(
+            anchor="w"
+        )
         ctk.CTkLabel(
             header,
             text=(
@@ -138,9 +140,13 @@ class TrainingReviewView(ctk.CTkFrame):
         preview.grid_columnconfigure(0, weight=1)
         preview.grid_rowconfigure(2, weight=1)
 
-        self.info_title = ctk.CTkLabel(preview, text="Nenhuma amostra selecionada", font=FONT_BODY_BOLD, text_color=TEXT_PRIMARY)
+        self.info_title = ctk.CTkLabel(
+            preview, text="Nenhuma amostra selecionada", font=FONT_BODY_BOLD, text_color=TEXT_PRIMARY
+        )
         self.info_title.grid(row=0, column=0, sticky="w", padx=15, pady=(10, 0))
-        self.info_detail = ctk.CTkLabel(preview, text="", font=FONT_SMALL, text_color=TEXT_SECONDARY, justify="left", anchor="w")
+        self.info_detail = ctk.CTkLabel(
+            preview, text="", font=FONT_SMALL, text_color=TEXT_SECONDARY, justify="left", anchor="w"
+        )
         self.info_detail.grid(row=1, column=0, sticky="ew", padx=15, pady=(0, 5))
 
         self.canvas = ctk.CTkCanvas(preview, bg=BG_INPUT, highlightthickness=0)
@@ -153,20 +159,40 @@ class TrainingReviewView(ctk.CTkFrame):
 
         self.action_buttons = [
             ctk.CTkButton(
-                actions, text="✅ Correto  [C]", font=FONT_BODY_BOLD, fg_color=COLOR_SUCCESS, hover_color="#059669",
-                height=36, command=lambda: self._review("correto"),
+                actions,
+                text="✅ Correto  [C]",
+                font=FONT_BODY_BOLD,
+                fg_color=COLOR_SUCCESS,
+                hover_color="#059669",
+                height=36,
+                command=lambda: self._review("correto"),
             ),
             ctk.CTkButton(
-                actions, text="🟢 Falso Alarme  [F]", font=FONT_BODY_BOLD, fg_color=COLOR_PRIMARY, hover_color="#1565c0",
-                height=36, command=lambda: self._review("falso_alarme"),
+                actions,
+                text="🟢 Falso Alarme  [F]",
+                font=FONT_BODY_BOLD,
+                fg_color=COLOR_PRIMARY,
+                hover_color="#1565c0",
+                height=36,
+                command=lambda: self._review("falso_alarme"),
             ),
             ctk.CTkButton(
-                actions, text="👤 Civil / Pedestre  [V]", font=FONT_BODY_BOLD, fg_color="#475569", hover_color="#64748b",
-                height=36, command=lambda: self._review("civil"),
+                actions,
+                text="👤 Civil / Pedestre  [V]",
+                font=FONT_BODY_BOLD,
+                fg_color="#475569",
+                hover_color="#64748b",
+                height=36,
+                command=lambda: self._review("civil"),
             ),
             ctk.CTkButton(
-                actions, text="🗑️ Descartar  [D]", font=FONT_BODY_BOLD, fg_color=COLOR_DANGER, hover_color="#b91c1c",
-                height=36, command=lambda: self._review("descartar"),
+                actions,
+                text="🗑️ Descartar  [D]",
+                font=FONT_BODY_BOLD,
+                fg_color=COLOR_DANGER,
+                hover_color="#b91c1c",
+                height=36,
+                command=lambda: self._review("descartar"),
             ),
         ]
         for col, btn in enumerate(self.action_buttons):
@@ -257,7 +283,7 @@ class TrainingReviewView(ctk.CTkFrame):
             text=f"⏳ {st['pendentes']} pendentes   ✅ {st['aprovados']} aprovadas   🗑️ {st['rejeitados']} descartadas"
         )
 
-    def _show_sample(self, sample: Optional[Dict[str, Any]]) -> None:
+    def _show_sample(self, sample: dict[str, Any] | None) -> None:
         self.current = sample
         self.canvas.delete("all")
         if sample is None:
@@ -278,7 +304,7 @@ class TrainingReviewView(ctk.CTkFrame):
         self._set_actions_state("normal")
         self._draw_sample(sample)
 
-    def _draw_sample(self, sample: Dict[str, Any]) -> None:
+    def _draw_sample(self, sample: dict[str, Any]) -> None:
         img = cv2.imread(sample["image_path"])
         if img is None:
             self.canvas.create_text(200, 150, text="Erro ao carregar imagem", fill="#ef4444")
@@ -296,7 +322,9 @@ class TrainingReviewView(ctk.CTkFrame):
             x1, y1, x2, y2 = d["bbox"]
             cv2.rectangle(img, (x1, y1), (x2, y2), color, thickness)
             label = f"{name} {int(d['confidence'] * 100)}%"
-            cv2.putText(img, label, (x1, max(15, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5 * thickness / 2 + 0.2, color, thickness)
+            cv2.putText(
+                img, label, (x1, max(15, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5 * thickness / 2 + 0.2, color, thickness
+            )
 
         rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         pil = Image.fromarray(rgb)
@@ -355,7 +383,7 @@ class TrainingReviewView(ctk.CTkFrame):
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_export_done(self, result: Optional[Dict[str, Any]], error: Optional[str]) -> None:
+    def _on_export_done(self, result: dict[str, Any] | None, error: str | None) -> None:
         self.export_btn.configure(state="normal")
         if error:
             self.status_lbl.configure(text=f"❌ Falha ao exportar: {error}", text_color=COLOR_DANGER)
@@ -366,7 +394,7 @@ class TrainingReviewView(ctk.CTkFrame):
         self.status_lbl.configure(
             text=(
                 f"✅ Dataset: {result['train']} treino / {result['val']} validação. Para treinar: "
-                f"python scripts/train_model.py --data \"{result['data_yaml']}\""
+                f'python scripts/train_model.py --data "{result["data_yaml"]}"'
             ),
             text_color=COLOR_SUCCESS,
         )

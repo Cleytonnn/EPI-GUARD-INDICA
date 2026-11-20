@@ -1,8 +1,7 @@
 """Testes unitários das entidades de domínio."""
 
-from src.core.domain.detection import Detection, BoundingBox
+from src.core.domain.detection import BoundingBox, Detection
 from src.core.domain.violation import Violation
-from src.core.domain.ppe_type import PPEClass, ViolationClass
 
 
 def test_detection_properties():

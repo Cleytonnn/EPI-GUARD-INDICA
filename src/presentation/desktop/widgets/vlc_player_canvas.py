@@ -10,13 +10,14 @@ import logging
 import platform
 import tkinter as tk
 from pathlib import Path
-from typing import Optional
+
 import customtkinter as ctk
 
 logger = logging.getLogger(__name__)
 
 try:
     import vlc
+
     HAS_VLC = True
 except Exception:
     HAS_VLC = False
@@ -30,9 +31,9 @@ class EmbeddedVLCPlayer(ctk.CTkFrame):
         self.width = width
         self.height = height
 
-        self._instance: Optional[vlc.Instance] = None
-        self._player: Optional[vlc.MediaPlayer] = None
-        self._current_media_path: Optional[str] = None
+        self._instance: vlc.Instance | None = None
+        self._player: vlc.MediaPlayer | None = None
+        self._current_media_path: str | None = None
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -68,7 +69,11 @@ class EmbeddedVLCPlayer(ctk.CTkFrame):
         if not self._instance or not self._player:
             return False
 
-        path_str = str(Path(media_path).resolve()) if not str(media_path).startswith(("rtsp://", "http://")) else str(media_path)
+        path_str = (
+            str(Path(media_path).resolve())
+            if not str(media_path).startswith(("rtsp://", "http://"))
+            else str(media_path)
+        )
         self._current_media_path = path_str
 
         try:
@@ -112,4 +117,3 @@ class EmbeddedVLCPlayer(ctk.CTkFrame):
     def get_length(self) -> int:
         """Retorna a duração total em milissegundos."""
         return self._player.get_length() if self._player else 0
-

@@ -1,6 +1,5 @@
 """Entrypoint CLI para a Interface Gráfica Desktop."""
 
-import sys
 from src.container import Container
 from src.presentation.desktop import run_desktop_app
 

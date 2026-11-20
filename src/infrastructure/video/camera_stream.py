@@ -6,7 +6,7 @@ import logging
 import queue
 import threading
 import time
-from typing import Optional, Tuple
+
 import cv2
 import numpy as np
 
@@ -30,9 +30,9 @@ class CameraStream:
         self.target_fps = fps
         self.reconnect_delay = reconnect_delay
 
-        self._cap: Optional[cv2.VideoCapture] = None
+        self._cap: cv2.VideoCapture | None = None
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._queue: queue.Queue = queue.Queue(maxsize=1)
         self._lock = threading.Lock()
         self._connected = False
@@ -95,7 +95,7 @@ class CameraStream:
             except queue.Full:
                 pass
 
-    def read(self, timeout: float = 1.0) -> Tuple[bool, Optional[np.ndarray]]:
+    def read(self, timeout: float = 1.0) -> tuple[bool, np.ndarray | None]:
         """Lê o quadro mais recente disponível."""
         try:
             frame = self._queue.get(timeout=timeout)

@@ -6,12 +6,12 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass(frozen=True)
 class VehicleMetadata:
     """Metadados contextuais extraídos da hierarquia de pastas ou arquivos."""
+
     plate: str
     record_date: str
     video_name: str
@@ -20,9 +20,9 @@ class VehicleMetadata:
     frame_index: int = 0
 
     @classmethod
-    def from_path(cls, video_path: Path | str, root_dir: Optional[Path | str] = None) -> VehicleMetadata:
+    def from_path(cls, video_path: Path | str, root_dir: Path | str | None = None) -> VehicleMetadata:
         """Cria VehicleMetadata a partir da estrutura de diretórios e nome de arquivo.
-        
+
         Estrutura esperada:
             [root_dir] / [PLACA] / [DATA] / [arquivo.265 / .mp4]
         """
@@ -58,10 +58,10 @@ class VehicleMetadata:
                     pass
 
         # Refinamento por padrão de nome de DVR (ex: U20260803-23492916N300.265)
-        date_match = re.search(r'[A-Za-z]?(\d{4})(\d{2})(\d{2})[-_](\d{2})(\d{2})(\d{2})', video_name)
+        date_match = re.search(r"[A-Za-z]?(\d{4})(\d{2})(\d{2})[-_](\d{2})(\d{2})(\d{2})", video_name)
         if date_match:
             y, m, d = date_match.group(1), date_match.group(2), date_match.group(3)
-            if not re.match(r'^\d{4}[-_]\d{2}[-_]\d{2}$', str(record_date)):
+            if not re.match(r"^\d{4}[-_]\d{2}[-_]\d{2}$", str(record_date)):
                 record_date = f"{y}-{m}-{d}"
 
         return cls(
@@ -93,4 +93,3 @@ class VehicleMetadata:
         """Determina se a gravação é proveniente de câmera interna de cabine (CH2, DMS, etc.)."""
         name_upper = self.video_name.upper()
         return any(tag in name_upper for tag in ("CH2", "CABINE", "DMS", "INTERN", "MOTORISTA"))
-

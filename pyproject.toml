@@ -66,3 +66,7 @@ ignore = [
     "B008", # function call in default argument (FastAPI Depends/File/Form)
 ]
 
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "lf"
+

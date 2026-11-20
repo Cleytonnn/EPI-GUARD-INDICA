@@ -111,7 +111,7 @@ def test_compliance_service_ignores_civilians_on_street():
         infer_missing_ppe=True,
         only_company_workers=True,
     )
-    
+
     # Metadados de gravação externa de rua (CH1 - dashcam)
     street_meta = VehicleMetadata(plate="TEST123", record_date="2026-10-14", video_name="CH1_rua.mp4")
     assert not street_meta.is_cabin
@@ -133,6 +133,3 @@ def test_compliance_service_ignores_civilians_on_street():
     violations = service.check([worker, uniform], metadata=street_meta)
     assert len(violations) >= 1
     assert any(v.violation_type == "no_helmet" for v in violations)
-
-
-

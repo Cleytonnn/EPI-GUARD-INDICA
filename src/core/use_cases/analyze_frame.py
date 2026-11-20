@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+
 import numpy as np
 
 from src.core.domain.detection import Detection
@@ -16,10 +16,11 @@ from src.core.services.compliance_service import ComplianceService
 @dataclass
 class FrameAnalysisResult:
     """Resultado da análise de um frame avulso."""
-    detections: List[Detection]
-    violations: List[Violation]
+
+    detections: list[Detection]
+    violations: list[Violation]
     is_compliant: bool
-    summary: Dict[str, int]
+    summary: dict[str, int]
 
 
 class AnalyzeFrameUseCase:
@@ -32,13 +33,13 @@ class AnalyzeFrameUseCase:
     def execute(
         self,
         frame: np.ndarray,
-        camera_id: Optional[str] = None,
+        camera_id: str | None = None,
         check_compliance: bool = True,
     ) -> FrameAnalysisResult:
         """Executa a detecção e compliance em um frame."""
         detections = self.detector.detect(frame, skip_frames=1)
 
-        violations: List[Violation] = []
+        violations: list[Violation] = []
         if check_compliance:
             meta = None
             if camera_id:
@@ -49,7 +50,7 @@ class AnalyzeFrameUseCase:
                 )
             violations = self.compliance_service.check(detections, metadata=meta)
 
-        summary: Dict[str, int] = {}
+        summary: dict[str, int] = {}
         for d in detections:
             summary[d.class_name] = summary.get(d.class_name, 0) + 1
 

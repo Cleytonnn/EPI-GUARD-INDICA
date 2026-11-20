@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import logging
-import sys
 from pathlib import Path
-from typing import Optional
+
 from src.container import Container
 
 logger = logging.getLogger(__name__)
@@ -13,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 def run_batch_command(
     container: Container,
-    input_dir: Optional[str | Path] = None,
-    skip_frames: Optional[int] = None,
+    input_dir: str | Path | None = None,
+    skip_frames: int | None = None,
     force: bool = False,
 ) -> int:
     """Executa a análise em lote de todos os arquivos de vídeo pendentes."""
@@ -31,9 +30,9 @@ def run_batch_command(
 
 def run_watch_command(
     container: Container,
-    input_dir: Optional[str | Path] = None,
-    interval_seconds: Optional[int] = None,
-    skip_frames: Optional[int] = None,
+    input_dir: str | Path | None = None,
+    interval_seconds: int | None = None,
+    skip_frames: int | None = None,
 ) -> None:
     """Inicia o monitoramento contínuo de novas gravações."""
     target_dir = input_dir or container.settings.video_batch.input_dir
@@ -50,7 +49,7 @@ def run_watch_command(
 def run_single_file_command(
     container: Container,
     file_path: str | Path,
-    skip_frames: Optional[int] = None,
+    skip_frames: int | None = None,
 ) -> int:
     """Analisa um arquivo de vídeo (.265 ou .mp4) individual."""
     path_obj = Path(file_path)
@@ -68,9 +67,9 @@ def run_single_file_command(
 
 def run_live_stream_command(
     container: Container,
-    source: Optional[int | str] = None,
+    source: int | str | None = None,
     no_display: bool = False,
-    skip_frames: Optional[int] = None,
+    skip_frames: int | None = None,
 ) -> None:
     """Inicia o monitoramento em tempo real de webcam ou câmera IP."""
     stream = container.create_camera_stream(source=source)
@@ -88,8 +87,9 @@ def run_live_stream_command(
 def run_test_email_command(container: Container) -> int:
     """Testa o envio de e-mail SMTP com credenciais configuradas."""
     logger.info("📧 Testando envio de e-mail SMTP...")
-    from src.core.domain.violation import Violation
     import time
+
+    from src.core.domain.violation import Violation
 
     dummy_violation = Violation(
         violation_type="no_helmet",

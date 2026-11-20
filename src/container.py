@@ -8,27 +8,27 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+
 from src.config.settings import ROOT_DIR, AppSettings
-from src.core.services.ppe_state_smoother import PPEStateSmoother
-from src.infrastructure.ai.hybrid_detector import HybridEPIDetector
 from src.core.services.compliance_service import ComplianceService
-from src.core.use_cases.process_video_file import ProcessVideoFileUseCase
-from src.core.use_cases.process_batch import ProcessBatchUseCase
-from src.core.use_cases.watch_directory import WatchDirectoryUseCase
+from src.core.services.ppe_state_smoother import PPEStateSmoother
 from src.core.use_cases.analyze_frame import AnalyzeFrameUseCase
+from src.core.use_cases.process_batch import ProcessBatchUseCase
 from src.core.use_cases.process_stream import ProcessLiveStreamUseCase
-from src.infrastructure.ai.yolo_detector import YOLODetector
+from src.core.use_cases.process_video_file import ProcessVideoFileUseCase
+from src.core.use_cases.watch_directory import WatchDirectoryUseCase
+from src.infrastructure.ai.hybrid_detector import HybridEPIDetector
 from src.infrastructure.ai.pose_detector import PoseEPIDetector
-from src.infrastructure.storage.file_alert_storage import FileAlertStorage
-from src.infrastructure.notifications.email_notifier import EmailNotifier
+from src.infrastructure.ai.yolo_detector import YOLODetector
 from src.infrastructure.notifications.composite_notifier import CompositeNotifier
+from src.infrastructure.notifications.email_notifier import EmailNotifier
 from src.infrastructure.notifications.rate_limiter import RateLimiter
-from src.infrastructure.repositories.json_processed_repo import JsonProcessedVideosRepository
 from src.infrastructure.repositories.csv_report_repo import CsvViolationReportRepository
+from src.infrastructure.repositories.json_processed_repo import JsonProcessedVideosRepository
+from src.infrastructure.storage.file_alert_storage import FileAlertStorage
+from src.infrastructure.training.active_learning_collector import ActiveLearningCollector
 from src.infrastructure.video.camera_stream import CameraStream
 from src.infrastructure.video.universal_reader import UniversalVideoReader
-from src.infrastructure.training.active_learning_collector import ActiveLearningCollector
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 class Container:
     """Fábrica de serviços e casos de uso da Clean Architecture."""
 
-    def __init__(self, settings: Optional[AppSettings] = None):
+    def __init__(self, settings: AppSettings | None = None):
         self.settings = settings or AppSettings.load()
 
         # 1. Infraestrutura - Detector de IA (Pose ou YOLO BBox)
@@ -70,9 +70,7 @@ class Container:
         )
 
         # 3. Infraestrutura - Notificações (Email + Rate Limiting)
-        self.rate_limiter = RateLimiter(
-            cooldown_seconds=self.settings.alerts.cooldown_seconds
-        )
+        self.rate_limiter = RateLimiter(cooldown_seconds=self.settings.alerts.cooldown_seconds)
         self.email_notifier = EmailNotifier(
             sender=self.settings.alerts.email_sender,
             password=self.settings.alerts.email_password,
@@ -87,12 +85,8 @@ class Container:
         )
 
         # 4. Infraestrutura - Repositórios de Persistência
-        self.processed_repo = JsonProcessedVideosRepository(
-            db_path=self.settings.video_batch.processed_db
-        )
-        self.report_repo = CsvViolationReportRepository(
-            csv_path=self.settings.video_batch.report_csv
-        )
+        self.processed_repo = JsonProcessedVideosRepository(db_path=self.settings.video_batch.processed_db)
+        self.report_repo = CsvViolationReportRepository(csv_path=self.settings.video_batch.report_csv)
 
         # 5. Fábrica de Leitores de Vídeo (Universal: .265, .mp4, etc.)
         self.video_reader_factory = lambda path: UniversalVideoReader(path)
@@ -137,9 +131,7 @@ class Container:
             supported_extensions=self.settings.video_batch.file_extensions,
         )
 
-        self.watch_directory_uc = WatchDirectoryUseCase(
-            batch_uc=self.process_batch_uc
-        )
+        self.watch_directory_uc = WatchDirectoryUseCase(batch_uc=self.process_batch_uc)
 
         self.analyze_frame_uc = AnalyzeFrameUseCase(
             detector=self.detector,
@@ -163,7 +155,8 @@ class Container:
         if not model_path.exists():
             logger.warning(
                 "Modelo de EPIs '%s' não encontrado — usando apenas Pose/heurística. "
-                "Treine com: python scripts/train_tcc.py", model_path,
+                "Treine com: python scripts/train_tcc.py",
+                model_path,
             )
             return pose_detector
         smoother = PPEStateSmoother(
@@ -181,7 +174,7 @@ class Container:
             smoother=smoother,
         )
 
-    def create_camera_stream(self, source: Optional[int | str] = None) -> CameraStream:
+    def create_camera_stream(self, source: int | str | None = None) -> CameraStream:
         """Cria uma instância de stream de câmera com a fonte fornecida ou configurada."""
         src = source if source is not None else self.settings.camera.source
         return CameraStream(

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+
 import cv2
 import numpy as np
 import torch
@@ -75,9 +75,7 @@ class PoseEPIDetector(IDetector):
         self.model = YOLO(self.model_path)
         logger.info("🦾 Modelo YOLO-Pose inicializado com sucesso.")
 
-    def _get_keypoint(
-        self, kps: np.ndarray, index: int, min_conf: float = 0.35
-    ) -> Optional[Tuple[int, int]]:
+    def _get_keypoint(self, kps: np.ndarray, index: int, min_conf: float = 0.35) -> tuple[int, int] | None:
         """Retorna coordenadas (x, y) de um keypoint se confiável, senão None."""
         if kps is None or index >= len(kps):
             return None
@@ -89,9 +87,9 @@ class PoseEPIDetector(IDetector):
     def _analyze_helmet(
         self,
         frame: np.ndarray,
-        box: Tuple[int, int, int, int],
+        box: tuple[int, int, int, int],
         kps: np.ndarray,
-    ) -> Tuple[bool, float, Tuple[int, int, int, int]]:
+    ) -> tuple[bool, float, tuple[int, int, int, int]]:
         """Analisa a região da cabeça para detectar capacete vs cabeça desprotegida."""
         x1, y1, x2, y2 = box
         frame_h, frame_w = frame.shape[:2]
@@ -174,18 +172,12 @@ class PoseEPIDetector(IDetector):
         # 4. Cores industriais de capacete (Branco brilhante, Amarelo, Laranja, Verde, Azul, Vermelho)
         white_mask = (hsv[:, :, 1] < 38) & (hsv[:, :, 2] > 205) & mask
 
-        yellow_orange_mask = (
-            cv2.inRange(hsv, np.array([4, 55, 65]), np.array([38, 255, 255])) & mask
-        )
+        yellow_orange_mask = cv2.inRange(hsv, np.array([4, 55, 65]), np.array([38, 255, 255])) & mask
 
         # Verde industrial (ex.: capacete verde de supervisao/eletricista, inclusive em sombra)
-        green_mask = (
-            cv2.inRange(hsv, np.array([34, 35, 25]), np.array([92, 255, 255])) & mask
-        )
+        green_mask = cv2.inRange(hsv, np.array([34, 35, 25]), np.array([92, 255, 255])) & mask
 
-        blue_mask = (
-            cv2.inRange(hsv, np.array([90, 55, 55]), np.array([132, 255, 255])) & mask
-        )
+        blue_mask = cv2.inRange(hsv, np.array([90, 55, 55]), np.array([132, 255, 255])) & mask
 
         red1 = cv2.inRange(hsv, np.array([0, 65, 60]), np.array([8, 255, 255]))
         red2 = cv2.inRange(hsv, np.array([168, 65, 60]), np.array([180, 255, 255]))
@@ -213,9 +205,9 @@ class PoseEPIDetector(IDetector):
     def _analyze_uniform_rf(
         self,
         frame: np.ndarray,
-        box: Tuple[int, int, int, int],
+        box: tuple[int, int, int, int],
         kps: np.ndarray,
-    ) -> Tuple[bool, float, Tuple[int, int, int, int]]:
+    ) -> tuple[bool, float, tuple[int, int, int, int]]:
         """Analisa o tronco buscando o Uniforme RF (ombro laranja + faixa refletiva cinza/prata)."""
         x1, y1, x2, y2 = box
         frame_h, frame_w = frame.shape[:2]
@@ -310,10 +302,10 @@ class PoseEPIDetector(IDetector):
     def _analyze_gloves(
         self,
         frame: np.ndarray,
-        wrist_pt: Tuple[int, int],
-        elbow_pt: Optional[Tuple[int, int]],
+        wrist_pt: tuple[int, int],
+        elbow_pt: tuple[int, int] | None,
         shoulder_w: int,
-    ) -> Tuple[Optional[bool], float, Tuple[int, int, int, int]]:
+    ) -> tuple[bool | None, float, tuple[int, int, int, int]]:
         """Analisa a região das mãos para distinguir luvas (vaqueta/alta vis.) vs pele descoberta.
 
         Retorna ``None`` quando a mão está oclusa (sobre manga laranja, calça escura ou sombra),
@@ -376,7 +368,7 @@ class PoseEPIDetector(IDetector):
 
         return None, 0.0, (hx1, hy1, hx2, hy2)
 
-    def detect(self, frame: np.ndarray, skip_frames: int = 1) -> List[Detection]:
+    def detect(self, frame: np.ndarray, skip_frames: int = 1) -> list[Detection]:
         """Executa a inferência de Pose e avaliação anatômica de EPIs."""
         if frame is None or frame.size == 0:
             return []
@@ -416,18 +408,10 @@ class PoseEPIDetector(IDetector):
 
             boxes = result.boxes.xyxy.cpu().numpy()
             confs = result.boxes.conf.cpu().numpy()
-            track_ids = (
-                result.boxes.id.int().cpu().numpy()
-                if result.boxes.id is not None
-                else [None] * len(boxes)
-            )
-            keypoints_data = (
-                result.keypoints.data.cpu().numpy()
-                if result.keypoints is not None
-                else None
-            )
+            track_ids = result.boxes.id.int().cpu().numpy() if result.boxes.id is not None else [None] * len(boxes)
+            keypoints_data = result.keypoints.data.cpu().numpy() if result.keypoints is not None else None
 
-            detections: List[Detection] = []
+            detections: list[Detection] = []
 
             # Suprime duplicatas aninhadas (ex.: caixa de tronco sobreposta a pessoa inteira)
             raw_areas = [max(1, (b[2] - b[0]) * (b[3] - b[1])) for b in boxes]
@@ -473,19 +457,23 @@ class PoseEPIDetector(IDetector):
 
                 if kps is None:
                     if self.only_company_workers:
-                        detections.append(Detection(
-                            class_name="civil",
-                            confidence=conf,
-                            bbox=(x1, y1, x2, y2),
-                            track_id=track_id,
-                        ))
+                        detections.append(
+                            Detection(
+                                class_name="civil",
+                                confidence=conf,
+                                bbox=(x1, y1, x2, y2),
+                                track_id=track_id,
+                            )
+                        )
                     else:
-                        detections.append(Detection(
-                            class_name="Person",
-                            confidence=conf,
-                            bbox=(x1, y1, x2, y2),
-                            track_id=track_id,
-                        ))
+                        detections.append(
+                            Detection(
+                                class_name="Person",
+                                confidence=conf,
+                                bbox=(x1, y1, x2, y2),
+                                track_id=track_id,
+                            )
+                        )
                     continue
 
                 sl = self._get_keypoint(kps, SHOULDER_L)
@@ -498,9 +486,7 @@ class PoseEPIDetector(IDetector):
 
                 # Avaliação de contexto de cabine (somente close-up real de motorista)
                 is_cabin_person = self.is_cabin or (
-                    (box_h / float(frame_h)) > 0.62
-                    and (box_w / float(frame_w)) > 0.25
-                    and (y2 >= frame_h * 0.85)
+                    (box_h / float(frame_h)) > 0.62 and (box_w / float(frame_w)) > 0.25 and (y2 >= frame_h * 0.85)
                 )
 
                 # Critério de Funcionário da Empresa vs Pedestre/Civil na rua
@@ -508,66 +494,82 @@ class PoseEPIDetector(IDetector):
 
                 # Se for civil na rua (sem uniforme RF e sem capacete): NÃO audita nem gera infração!
                 if self.only_company_workers and not is_company_worker:
-                    detections.append(Detection(
-                        class_name="civil",
-                        confidence=conf,
-                        bbox=(x1, y1, x2, y2),
-                        track_id=track_id,
-                    ))
+                    detections.append(
+                        Detection(
+                            class_name="civil",
+                            confidence=conf,
+                            bbox=(x1, y1, x2, y2),
+                            track_id=track_id,
+                        )
+                    )
                     continue
 
                 # 1. Registro do Trabalhador da Empresa
-                detections.append(Detection(
-                    class_name="Person",
-                    confidence=conf,
-                    bbox=(x1, y1, x2, y2),
-                    track_id=track_id,
-                ))
+                detections.append(
+                    Detection(
+                        class_name="Person",
+                        confidence=conf,
+                        bbox=(x1, y1, x2, y2),
+                        track_id=track_id,
+                    )
+                )
 
                 # 2. Avaliação de Capacete
                 if has_helmet:
-                    detections.append(Detection(
-                        class_name="helmet",
-                        confidence=helmet_score,
-                        bbox=head_box,
-                        track_id=track_id,
-                    ))
+                    detections.append(
+                        Detection(
+                            class_name="helmet",
+                            confidence=helmet_score,
+                            bbox=head_box,
+                            track_id=track_id,
+                        )
+                    )
                 else:
-                    detections.append(Detection(
-                        class_name="no_helmet",
-                        confidence=round(1.0 - helmet_score, 3),
-                        bbox=head_box,
-                        track_id=track_id,
-                    ))
+                    detections.append(
+                        Detection(
+                            class_name="no_helmet",
+                            confidence=round(1.0 - helmet_score, 3),
+                            bbox=head_box,
+                            track_id=track_id,
+                        )
+                    )
 
                 # 3. Avaliação de Uniforme RF (e compatibilidade Colete)
                 if has_uniform:
-                    detections.append(Detection(
-                        class_name="uniform_rf",
-                        confidence=uniform_score,
-                        bbox=torso_box,
-                        track_id=track_id,
-                    ))
-                    detections.append(Detection(
-                        class_name="vest",
-                        confidence=uniform_score,
-                        bbox=torso_box,
-                        track_id=track_id,
-                    ))
+                    detections.append(
+                        Detection(
+                            class_name="uniform_rf",
+                            confidence=uniform_score,
+                            bbox=torso_box,
+                            track_id=track_id,
+                        )
+                    )
+                    detections.append(
+                        Detection(
+                            class_name="vest",
+                            confidence=uniform_score,
+                            bbox=torso_box,
+                            track_id=track_id,
+                        )
+                    )
                 else:
                     # Trabalhador descaracterizado (em cabine ou no canteiro)
-                    detections.append(Detection(
-                        class_name="no_uniform_rf",
-                        confidence=0.85,
-                        bbox=torso_box,
-                        track_id=track_id,
-                    ))
-                    detections.append(Detection(
-                        class_name="no_vest",
-                        confidence=0.85,
-                        bbox=torso_box,
-                        track_id=track_id,
-                    ))
+                    detections.append(
+                        Detection(
+                            class_name="no_uniform_rf",
+                            confidence=0.85,
+                            bbox=torso_box,
+                            track_id=track_id,
+                        )
+                    )
+                    detections.append(
+                        Detection(
+                            class_name="no_vest",
+                            confidence=0.85,
+                            bbox=torso_box,
+                            track_id=track_id,
+                        )
+                    )
 
                 # 4. Avaliação de Luvas (Pulsos confiáveis e não oclusos atrás do tronco)
                 wl = self._get_keypoint(kps, WRIST_L, min_conf=0.50)
@@ -587,23 +589,25 @@ class PoseEPIDetector(IDetector):
                         and (y1 + box_h * 0.18) <= wrist[1] <= (y1 + box_h * 0.56)
                     ):
                         continue
-                    has_gloves, glove_conf, hand_box = self._analyze_gloves(
-                        frame, wrist, elbow, shoulder_w
-                    )
+                    has_gloves, glove_conf, hand_box = self._analyze_gloves(frame, wrist, elbow, shoulder_w)
                     if has_gloves is True:
-                        detections.append(Detection(
-                            class_name="gloves",
-                            confidence=glove_conf,
-                            bbox=hand_box,
-                            track_id=track_id,
-                        ))
+                        detections.append(
+                            Detection(
+                                class_name="gloves",
+                                confidence=glove_conf,
+                                bbox=hand_box,
+                                track_id=track_id,
+                            )
+                        )
                     elif has_gloves is False:
-                        detections.append(Detection(
-                            class_name="no_gloves",
-                            confidence=glove_conf,
-                            bbox=hand_box,
-                            track_id=track_id,
-                        ))
+                        detections.append(
+                            Detection(
+                                class_name="no_gloves",
+                                confidence=glove_conf,
+                                bbox=hand_box,
+                                track_id=track_id,
+                            )
+                        )
 
             return detections
 
@@ -630,7 +634,7 @@ class PoseEPIDetector(IDetector):
         self._confidence = float(value)
 
     @property
-    def class_names(self) -> Dict[int, str]:
+    def class_names(self) -> dict[int, str]:
         return {
             0: "Person",
             1: "helmet",
@@ -642,4 +646,3 @@ class PoseEPIDetector(IDetector):
             7: "vest",
             8: "no_vest",
         }
-

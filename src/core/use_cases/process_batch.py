@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Set
+
 from src.core.interfaces.processed_repo import IProcessedVideosRepository
 from src.core.use_cases.process_video_file import ProcessVideoFileUseCase, VideoProcessingResult
 
@@ -18,7 +18,7 @@ class ProcessBatchUseCase:
         self,
         process_video_uc: ProcessVideoFileUseCase,
         processed_repo: IProcessedVideosRepository,
-        supported_extensions: Optional[List[str]] = None,
+        supported_extensions: list[str] | None = None,
     ):
         self.process_video_uc = process_video_uc
         self.processed_repo = processed_repo
@@ -26,17 +26,14 @@ class ProcessBatchUseCase:
             ext.lower() for ext in (supported_extensions or [".265", ".h265", ".hevc", ".mp4", ".avi", ".mkv"])
         )
 
-    def find_videos(self, input_dir: Path | str) -> List[Path]:
+    def find_videos(self, input_dir: Path | str) -> list[Path]:
         """Varre recursivamente o diretório por arquivos suportados."""
         dir_obj = Path(input_dir).resolve()
         if not dir_obj.exists():
             logger.warning(f"⚠️ Diretório de entrada não existe: {dir_obj}")
             return []
 
-        videos = [
-            p for p in dir_obj.rglob("*")
-            if p.is_file() and p.suffix.lower() in self.supported_extensions
-        ]
+        videos = [p for p in dir_obj.rglob("*") if p.is_file() and p.suffix.lower() in self.supported_extensions]
         videos.sort()
         return videos
 
@@ -45,7 +42,7 @@ class ProcessBatchUseCase:
         input_dir: Path | str,
         skip_frames: int = 3,
         force_reprocess: bool = False,
-    ) -> List[VideoProcessingResult]:
+    ) -> list[VideoProcessingResult]:
         """Executa a análise em todos os vídeos pendentes do diretório."""
         all_videos = self.find_videos(input_dir)
         logger.info(f"🔍 {len(all_videos)} arquivo(s) de vídeo encontrado(s) na pasta.")
@@ -59,7 +56,7 @@ class ProcessBatchUseCase:
 
         logger.info(f"📋 {len(pending_videos)} vídeo(s) pendente(s) para processamento.")
 
-        results: List[VideoProcessingResult] = []
+        results: list[VideoProcessingResult] = []
         for idx, video_path in enumerate(pending_videos, 1):
             logger.info(f"\n[{idx}/{len(pending_videos)}] Iniciando análise...")
             res = self.process_video_uc.execute(
@@ -72,7 +69,7 @@ class ProcessBatchUseCase:
         self._log_summary(results)
         return results
 
-    def _log_summary(self, results: List[VideoProcessingResult]) -> None:
+    def _log_summary(self, results: list[VideoProcessingResult]) -> None:
         total = len(results)
         violations = sum(r.violations_count for r in results)
         total_time = sum(r.elapsed_seconds for r in results)

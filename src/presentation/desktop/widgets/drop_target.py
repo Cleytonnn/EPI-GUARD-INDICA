@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
+
 import customtkinter as ctk
 
 from src.presentation.desktop.theme import (
     BG_CARD,
     BG_CARD_HOVER,
-    BG_INPUT,
     BORDER_COLOR,
     COLOR_PRIMARY,
     COLOR_SUCCESS,
-    FONT_BODY,
     FONT_BODY_BOLD,
     FONT_SMALL,
-    FONT_SUBTITLE,
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
@@ -46,7 +43,7 @@ class DropTarget(ctk.CTkFrame):
             **kwargs,
         )
         self.on_file_selected = on_file_selected
-        self.selected_file: Optional[str] = None
+        self.selected_file: str | None = None
 
         self._build_ui()
         self._setup_dnd()

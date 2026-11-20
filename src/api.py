@@ -8,7 +8,9 @@ Uso:
 from __future__ import annotations
 
 import argparse
+
 import uvicorn
+
 from src.container import Container
 from src.presentation.api.app import create_app
 

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Optional, Protocol, Tuple, runtime_checkable
+from typing import Protocol, runtime_checkable
+
 import numpy as np
 
 
@@ -14,7 +15,7 @@ class IVideoReader(Protocol):
         """Indica se o arquivo ou stream está aberto com sucesso."""
         ...
 
-    def read(self) -> Tuple[bool, Optional[np.ndarray]]:
+    def read(self) -> tuple[bool, np.ndarray | None]:
         """Lê o próximo frame como array NumPy BGR."""
         ...
 

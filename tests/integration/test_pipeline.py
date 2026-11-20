@@ -1,8 +1,9 @@
 """Testes de integração ponta a ponta da nova arquitetura."""
 
 import numpy as np
-from src.container import Container
+
 from src.config.settings import AppSettings
+from src.container import Container
 from src.presentation.api.app import create_app
 
 
@@ -41,4 +42,3 @@ def test_fastapi_app_creation_and_routes():
     assert "/analyze/base64" in paths
     assert "/analyze/annotated" in paths
     assert "/" in paths
-

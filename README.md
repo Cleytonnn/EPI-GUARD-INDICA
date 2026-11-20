@@ -5,7 +5,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x%20%7C%20CUDA%2012-EE4C2C.svg)](https://pytorch.org/)
 [![YOLO](https://img.shields.io/badge/YOLO-Pose%20%26%20v11%20Ultralytics-00FFFF.svg)](https://docs.ultralytics.com/)
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2F%20Hexagonal-brightgreen.svg)]()
-[![Tests](https://img.shields.io/badge/Tests-50%20Passed-success.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-55%20Passed-success.svg)]()
 [![Author](https://img.shields.io/badge/CRIADO%20POR-CLEYTON%20BAUMGRATZ-orange.svg)]()
 
 > **CRIADO POR CLEYTON BAUMGRATZ**
@@ -82,20 +82,23 @@ INDICADOR/
 │   ├── settings.yaml                  # Configurações gerais (IA, Compliance, Batch, Active Learning)
 │   └── cameras.yaml                   # Configuração de câmeras CFTV remotas via HTTP/API
 ├── models/
-│   └── best.pt                        # Pesos treinados customizados para detecção de EPI
+│   ├── best.pt                        # Pesos treinados customizados para detecção de EPI
+│   └── epi_best.pt                    # Modelo YOLOv8 de EPIs (TCC) usado pelo detector híbrido
 ├── scripts/
 │   ├── extract_frames.py              # Extração de frames de vídeos para rotulagem
-│   └── train_model.py                 # Fine-tuning, validação e exportação ONNX de modelos YOLO
+│   ├── train_model.py                 # Fine-tuning, validação e exportação ONNX de modelos YOLO
+│   ├── train_tcc.py                   # Treinamento seguindo a metodologia do TCC (gera models/epi_best.pt)
+│   └── benchmark_stability.py         # Compara estabilidade (flicker) Pose vs Híbrido em um vídeo
 ├── src/
 │   ├── config/
 │   │   └── settings.py                # Carregamento tipado (Dataclasses + YAML + .env)
 │   ├── core/                          # NÚCLEO PURO (Sem dependências de infraestrutura)
 │   │   ├── domain/                    # Detection, BoundingBox, Violation, VehicleMetadata, PPEClass
 │   │   ├── interfaces/                # Contratos abstratos (Ports)
-│   │   ├── services/                  # ComplianceService (confirmação temporal e filtro de civis)
+│   │   ├── services/                  # ComplianceService (confirmação temporal) e PPEStateSmoother (EMA + histerese)
 │   │   └── use_cases/                 # Casos de uso da aplicação
 │   ├── infrastructure/                # ADAPTADORES TECNOLÓGICOS
-│   │   ├── ai/                        # PoseEPIDetector (YOLO-Pose anatômico) e YOLODetector
+│   │   ├── ai/                        # HybridEPIDetector, PoseEPIDetector (YOLO-Pose anatômico) e YOLODetector
 │   │   ├── cctv/                      # CameraAPIClient (Hikvision, Intelbras, ONVIF, REST)
 │   │   ├── notifications/             # EmailNotifier, CompositeNotifier, RateLimiter
 │   │   ├── repositories/              # CsvViolationReportRepository, JsonProcessedVideosRepository
@@ -121,7 +124,9 @@ INDICADOR/
 ├── testar.bat                         # Executor 1-clique da suíte de testes Pytest
 ├── run_desktop.py                     # Atalho Python para inicialização Desktop
 ├── pyproject.toml                     # Metadados PEP 621, configuração do Pytest e Ruff
-├── requirements.txt                   # Dependências de produção e desenvolvimento
+├── requirements.txt                   # Dependências de execução
+├── requirements-dev.txt               # Dependências de desenvolvimento (inclui Ruff)
+├── .editorconfig / .gitattributes     # Padronização de estilo e finais de linha
 ├── Dockerfile                         # Imagem Docker com suporte a NVIDIA CUDA
 └── docker-compose.yml                 # Orquestração Docker com reserva de GPU
 ```
@@ -208,6 +213,12 @@ Para rodar toda a suíte de testes automatizados (unitários + integração):
 .\testar.bat
 # ou:
 .\.venv\Scripts\python.exe -m pytest
+```
+
+Qualidade estática (instale com `pip install -r requirements-dev.txt`):
+```powershell
+.\.venv\Scripts\python.exe -m ruff check .          # lint (pyflakes, bugbear, isort, pyupgrade)
+.\.venv\Scripts\python.exe -m ruff format --check .  # formatação
 ```
 
 ---

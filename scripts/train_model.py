@@ -41,12 +41,12 @@ def train_ultralytics(
     name: str = "ppe_detection",
 ):
     """Treina o modelo YOLO com o dataset Construction-PPE da Ultralytics.
-    
+
     Este dataset possui 1.416 imagens e 11 classes:
     - EPI usado: helmet, gloves, vest, boots, goggles
     - EPI ausente: no_helmet, no_gloves, no_boots, no_goggle
     - Outros: Person, none
-    
+
     Args:
         model_name: Modelo base para fine-tuning.
         epochs: Número de épocas de treinamento.
@@ -82,10 +82,10 @@ def train_ultralytics(
         device=device if device else None,
         project=project,
         name=name,
-        patience=20,          # Early stopping após 20 épocas sem melhora
+        patience=20,  # Early stopping após 20 épocas sem melhora
         save=True,
-        save_period=10,       # Salvar checkpoint a cada 10 épocas
-        plots=True,           # Gerar gráficos de treinamento
+        save_period=10,  # Salvar checkpoint a cada 10 épocas
+        plots=True,  # Gerar gráficos de treinamento
         verbose=True,
     )
 
@@ -96,6 +96,7 @@ def train_ultralytics(
         dest.parent.mkdir(exist_ok=True)
 
         import shutil
+
         shutil.copy2(best_model_path, dest)
         logger.info(f"✅ Melhor modelo copiado para: {dest}")
     else:
@@ -121,10 +122,10 @@ def train_roboflow(
     device: str = "",
 ):
     """Treina o modelo com um dataset do Roboflow Universe.
-    
+
     Útil para adicionar classes extras como macacão (coverall),
     máscara facial, protetor auricular, etc.
-    
+
     Args:
         api_key: Chave da API do Roboflow.
         workspace: Nome do workspace no Roboflow.
@@ -168,6 +169,7 @@ def train_roboflow(
         dest = Path(__file__).resolve().parent.parent / "models" / "best_roboflow.pt"
         dest.parent.mkdir(exist_ok=True)
         import shutil
+
         shutil.copy2(best_path, dest)
         logger.info(f"✅ Modelo Roboflow salvo em: {dest}")
 
@@ -176,7 +178,7 @@ def train_roboflow(
 
 def validate_model(model_path: str = "models/best.pt"):
     """Valida o modelo treinado no dataset de teste.
-    
+
     Args:
         model_path: Caminho para o modelo treinado.
     """
@@ -202,7 +204,7 @@ def export_model(
     format: str = "onnx",
 ):
     """Exporta o modelo para formato otimizado.
-    
+
     Args:
         model_path: Caminho para o modelo treinado.
         format: Formato de exportação ('onnx', 'engine', 'openvino').
@@ -231,22 +233,25 @@ Exemplos:
   python scripts/train_model.py --dataset roboflow --api-key CHAVE --workspace ws --project proj
         """,
     )
-    parser.add_argument("--data", default=None, help="Caminho do arquivo YAML do dataset customizado (ex: datasets/custom_ppe/data.yaml)")
+    parser.add_argument(
+        "--data",
+        default=None,
+        help="Caminho do arquivo YAML do dataset customizado (ex: datasets/custom_ppe/data.yaml)",
+    )
     parser.add_argument("--model", default="yolo11n.pt", help="Modelo base (default: yolo11n.pt)")
     parser.add_argument("--epochs", type=int, default=100, help="Número de épocas (default: 100)")
     parser.add_argument("--imgsz", type=int, default=640, help="Tamanho da imagem (default: 640)")
     parser.add_argument("--batch", type=int, default=16, help="Batch size (default: 16)")
     parser.add_argument("--device", default="", help="Dispositivo: '', '0', 'cpu' (default: auto)")
-    parser.add_argument("--dataset", default="ultralytics", choices=["ultralytics", "roboflow"],
-                        help="Fonte do dataset")
+    parser.add_argument(
+        "--dataset", default="ultralytics", choices=["ultralytics", "roboflow"], help="Fonte do dataset"
+    )
     parser.add_argument("--api-key", default=None, help="API key do Roboflow")
     parser.add_argument("--workspace", default=None, help="Workspace do Roboflow")
     parser.add_argument("--project", default=None, help="Projeto do Roboflow")
     parser.add_argument("--version", type=int, default=1, help="Versão do dataset Roboflow")
-    parser.add_argument("--validate", default=None, metavar="MODEL_PATH",
-                        help="Validar um modelo treinado")
-    parser.add_argument("--export", default=None, metavar="MODEL_PATH",
-                        help="Exportar modelo para formato otimizado")
+    parser.add_argument("--validate", default=None, metavar="MODEL_PATH", help="Validar um modelo treinado")
+    parser.add_argument("--export", default=None, metavar="MODEL_PATH", help="Exportar modelo para formato otimizado")
     parser.add_argument("--format", default="onnx", help="Formato de exportação (default: onnx)")
 
     return parser.parse_args()
@@ -269,9 +274,7 @@ def main():
     # Modo treinamento
     if args.dataset == "roboflow":
         if not args.api_key or not args.workspace or not args.project:
-            logger.error(
-                "❌ Para dataset Roboflow, forneça: --api-key, --workspace, --project"
-            )
+            logger.error("❌ Para dataset Roboflow, forneça: --api-key, --workspace, --project")
             sys.exit(1)
         train_roboflow(
             api_key=args.api_key,
@@ -298,4 +301,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

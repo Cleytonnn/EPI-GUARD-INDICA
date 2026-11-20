@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-import csv
 import os
 from pathlib import Path
-from typing import Optional
-from PIL import Image, ImageTk
+
 import customtkinter as ctk
+from PIL import Image, ImageTk
 
 from src.container import Container
 from src.presentation.desktop.theme import (
     BG_CARD,
     BG_INPUT,
     BORDER_COLOR,
-    COLOR_PRIMARY,
     COLOR_SUCCESS,
     FONT_BODY,
     FONT_BODY_BOLD,
@@ -32,8 +30,8 @@ class EvidenceView(ctk.CTkFrame):
     def __init__(self, master, container: Container, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.container = container
-        self.selected_image_path: Optional[str] = None
-        self._current_photo: Optional[ImageTk.PhotoImage] = None
+        self.selected_image_path: str | None = None
+        self._current_photo: ImageTk.PhotoImage | None = None
 
         self._build_ui()
         self._refresh_data()
@@ -213,14 +211,10 @@ class EvidenceView(ctk.CTkFrame):
             self._current_photo = ImageTk.PhotoImage(resized)
 
             self.preview_canvas.delete("all")
-            self.preview_canvas.create_image(
-                canvas_w // 2, canvas_h // 2, image=self._current_photo, anchor="center"
-            )
+            self.preview_canvas.create_image(canvas_w // 2, canvas_h // 2, image=self._current_photo, anchor="center")
         except Exception as e:
             self.preview_canvas.delete("all")
-            self.preview_canvas.create_text(
-                200, 150, text=f"Erro ao carregar imagem: {e}", fill="#ef4444"
-            )
+            self.preview_canvas.create_text(200, 150, text=f"Erro ao carregar imagem: {e}", fill="#ef4444")
 
     def _open_alerts_folder(self) -> None:
         p = Path(self.container.settings.alerts.save_dir).resolve()

@@ -8,6 +8,7 @@ Uso:
 import argparse
 import sys
 from pathlib import Path
+
 import cv2
 
 # Configura encoding UTF-8 para evitar erros de emoji no terminal Windows
@@ -58,7 +59,9 @@ def extract_frames(
         extracted_this_video = 0
         video_stem = video_file.stem
 
-        print(f"[{v_idx}/{len(videos)}] Processando {video_file.name} (a cada {interval_seconds}s via {reader.backend})...")
+        print(
+            f"[{v_idx}/{len(videos)}] Processando {video_file.name} (a cada {interval_seconds}s via {reader.backend})..."
+        )
 
         while True:
             ret, frame = reader.read()
@@ -103,4 +106,3 @@ if __name__ == "__main__":
         interval_seconds=args.interval,
         max_frames_per_video=args.max,
     )
-

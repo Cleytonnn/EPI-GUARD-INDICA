@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
 
 import numpy as np
 
@@ -24,14 +23,13 @@ class ITrainingSampleCollector(ABC):
     def consider(
         self,
         frame: np.ndarray,
-        detections: List[Detection],
-        violations: Optional[List[Violation]] = None,
-        metadata: Optional[VehicleMetadata] = None,
-    ) -> Optional[str]:
+        detections: list[Detection],
+        violations: list[Violation] | None = None,
+        metadata: VehicleMetadata | None = None,
+    ) -> str | None:
         """Avalia o frame e, se for relevante, salva como amostra pendente.
 
         Returns:
             ID da amostra salva, ou None se o frame foi descartado.
         """
         raise NotImplementedError
-

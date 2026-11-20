@@ -7,7 +7,8 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
+
 from src.core.domain.vehicle_metadata import VehicleMetadata
 from src.core.interfaces.processed_repo import IProcessedVideosRepository
 
@@ -19,13 +20,13 @@ class JsonProcessedVideosRepository(IProcessedVideosRepository):
 
     def __init__(self, db_path: str | Path = "videos_processados.json"):
         self.db_path = Path(db_path)
-        self.data: Dict[str, Any] = {}
+        self.data: dict[str, Any] = {}
         self._load()
 
     def _load(self) -> None:
         if self.db_path.exists():
             try:
-                with open(self.db_path, "r", encoding="utf-8") as f:
+                with open(self.db_path, encoding="utf-8") as f:
                     self.data = json.load(f)
             except Exception as e:
                 logger.warning(f"⚠️ Erro ao carregar banco de vídeos processados: {e}")

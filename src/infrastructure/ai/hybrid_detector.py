@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -26,7 +25,7 @@ from src.core.services.ppe_state_smoother import PPEState, PPEStateSmoother
 
 logger = logging.getLogger(__name__)
 
-Box = Tuple[int, int, int, int]
+Box = tuple[int, int, int, int]
 
 POSITIVE = {"helmet", "gloves", "vest"}
 NEGATIVE = {"no_helmet", "no_gloves"}
@@ -46,17 +45,17 @@ def center_in_box(inner: Box, outer: Box) -> bool:
     return outer[0] <= cx <= outer[2] and outer[1] <= cy <= outer[3]
 
 
-def default_zones(person: Box) -> Dict[str, Box]:
+def default_zones(person: Box) -> dict[str, Box]:
     """Zonas aproximadas a partir da caixa da pessoa (usadas quando não há keypoints)."""
     x1, y1, x2, y2 = person
-    w, h = x2 - x1, y2 - y1
+    _w, h = x2 - x1, y2 - y1
     return {
         "head": (x1, y1, x2, y1 + int(h * 0.28)),
         "torso": (x1, y1 + int(h * 0.15), x2, y1 + int(h * 0.62)),
     }
 
 
-def fuse_evidence(pos: float, neg: float, heuristic_present: Optional[bool], has_negative_class: bool) -> float:
+def fuse_evidence(pos: float, neg: float, heuristic_present: bool | None, has_negative_class: bool) -> float:
     """Converte evidências (modelo + heurística) em uma observação de presença em [0, 1].
 
     - Modelo viu o EPI/ausência: domina (80%) e a heurística ajusta (20%).
@@ -83,15 +82,15 @@ class _PersonGroup:
     def __init__(self, person: Detection, is_civil: bool = False):
         self.person = person
         self.is_civil = is_civil
-        self.items: List[Detection] = []
+        self.items: list[Detection] = []
 
-    def first(self, *names: str) -> Optional[Detection]:
+    def first(self, *names: str) -> Detection | None:
         for d in self.items:
             if d.class_name in names:
                 return d
         return None
 
-    def all(self, *names: str) -> List[Detection]:
+    def all(self, *names: str) -> list[Detection]:
         return [d for d in self.items if d.class_name in names]
 
 
@@ -106,7 +105,7 @@ class HybridEPIDetector(IDetector):
         ppe_iou: float = 0.5,
         ppe_imgsz: int = 640,
         crop_padding: float = 0.18,
-        smoother: Optional[PPEStateSmoother] = None,
+        smoother: PPEStateSmoother | None = None,
         ppe_model=None,
     ):
         self.pose = pose_detector
@@ -115,23 +114,24 @@ class HybridEPIDetector(IDetector):
         self.ppe_imgsz = int(ppe_imgsz)
         self.crop_padding = float(crop_padding)
         self.smoother = smoother or PPEStateSmoother()
-        self._worker_grace: Dict[int, int] = {}
+        self._worker_grace: dict[int, int] = {}
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         if ppe_model is not None:
             self.ppe_model = ppe_model
         else:
             from ultralytics import YOLO
+
             logger.info("🦺 Carregando modelo de EPIs em [%s]: %s", self.device.upper(), ppe_model_path)
             self.ppe_model = YOLO(str(ppe_model_path))
-        self._ppe_names: Dict[int, str] = dict(getattr(self.ppe_model, "names", {}))
+        self._ppe_names: dict[int, str] = dict(getattr(self.ppe_model, "names", {}))
 
     # ------------------------------------------------------------------ helpers
     @staticmethod
-    def _group(base: List[Detection]) -> List[_PersonGroup]:
+    def _group(base: list[Detection]) -> list[_PersonGroup]:
         """Reagrupa a lista sequencial do PoseEPIDetector (Person/civil seguido de seus itens)."""
-        groups: List[_PersonGroup] = []
-        current: Optional[_PersonGroup] = None
+        groups: list[_PersonGroup] = []
+        current: _PersonGroup | None = None
         for det in base:
             if det.class_name in ("Person", "civil"):
                 current = _PersonGroup(det, is_civil=det.class_name == "civil")
@@ -140,7 +140,7 @@ class HybridEPIDetector(IDetector):
                 current.items.append(det)
         return groups
 
-    def _run_ppe_model(self, frame: np.ndarray, groups: List[_PersonGroup]) -> List[List[Detection]]:
+    def _run_ppe_model(self, frame: np.ndarray, groups: list[_PersonGroup]) -> list[list[Detection]]:
         """Roda o modelo de EPIs nos recortes enquadrados de cada pessoa (batch)."""
         h, w = frame.shape[:2]
         crops, origins = [], []
@@ -164,30 +164,33 @@ class HybridEPIDetector(IDetector):
             device=self.device,
             verbose=False,
         )
-        per_person: List[List[Detection]] = []
-        for res, (ox, oy) in zip(results, origins):
-            dets: List[Detection] = []
+        per_person: list[list[Detection]] = []
+        for res, (ox, oy) in zip(results, origins, strict=True):
+            dets: list[Detection] = []
             if res.boxes is not None and len(res.boxes) > 0:
                 xyxy = res.boxes.xyxy.cpu().numpy()
                 confs = res.boxes.conf.cpu().numpy()
                 clss = res.boxes.cls.cpu().numpy().astype(int)
-                for b, c, k in zip(xyxy, confs, clss):
+                for b, c, k in zip(xyxy, confs, clss, strict=True):
                     name = self._ppe_names.get(int(k), f"class_{k}")
-                    dets.append(Detection(
-                        class_name=name,
-                        confidence=float(c),
-                        bbox=(int(b[0]) + ox, int(b[1]) + oy, int(b[2]) + ox, int(b[3]) + oy),
-                    ))
+                    dets.append(
+                        Detection(
+                            class_name=name,
+                            confidence=float(c),
+                            bbox=(int(b[0]) + ox, int(b[1]) + oy, int(b[2]) + ox, int(b[3]) + oy),
+                        )
+                    )
             per_person.append(dets)
         return per_person
 
     @staticmethod
-    def _evidence(model_dets: List[Detection], zone: Box, pos_names: set, neg_names: set,
-                  frame_w: int, frame_h: int) -> Tuple[float, float, Optional[Box]]:
+    def _evidence(
+        model_dets: list[Detection], zone: Box, pos_names: set, neg_names: set, frame_w: int, frame_h: int
+    ) -> tuple[float, float, Box | None]:
         """Maior confiança positiva/negativa do modelo cujo centro cai na zona expandida."""
         area = expand_box(zone, 0.6, 20, frame_w, frame_h)
         pos = neg = 0.0
-        pos_box: Optional[Box] = None
+        pos_box: Box | None = None
         for d in model_dets:
             if not center_in_box(d.bbox, area):
                 continue
@@ -198,7 +201,7 @@ class HybridEPIDetector(IDetector):
         return pos, neg, pos_box
 
     # ------------------------------------------------------------------- detect
-    def detect(self, frame: np.ndarray, skip_frames: int = 1) -> List[Detection]:
+    def detect(self, frame: np.ndarray, skip_frames: int = 1) -> list[Detection]:
         base = self.pose.detect(frame, skip_frames)
         self.smoother.begin_frame()
         if frame is None or frame.size == 0 or not base:
@@ -215,8 +218,8 @@ class HybridEPIDetector(IDetector):
             logger.error("Erro no modelo de EPIs, usando apenas heurística: %s", exc, exc_info=True)
             return base
 
-        output: List[Detection] = []
-        for idx, (group, model_dets) in enumerate(zip(groups, model_by_person)):
+        output: list[Detection] = []
+        for idx, (group, model_dets) in enumerate(zip(groups, model_by_person, strict=True)):
             person = group.person
             tid = person.track_id if person.track_id not in (None, -1) else -(idx + 1)
 
@@ -228,7 +231,8 @@ class HybridEPIDetector(IDetector):
             # Pedestre: só mantém worker por curta janela de graça (evita lock permanente se encostar em cone)
             if group.is_civil:
                 strong = [
-                    d for d in model_dets
+                    d
+                    for d in model_dets
                     if (d.class_name == "helmet" and d.confidence >= 0.58)
                     or (d.class_name in {"vest", "uniform_rf", "coverall"} and d.confidence >= 0.60)
                 ]
@@ -253,11 +257,20 @@ class HybridEPIDetector(IDetector):
             self._emit_items(output, group, model_dets, zones, tid, person, frame_w, frame_h)
         return output
 
-    def _emit_items(self, output: List[Detection], group: _PersonGroup, model_dets: List[Detection],
-                    zones: Dict[str, Box], tid: int, person: Detection, frame_w: int, frame_h: int) -> None:
+    def _emit_items(
+        self,
+        output: list[Detection],
+        group: _PersonGroup,
+        model_dets: list[Detection],
+        zones: dict[str, Box],
+        tid: int,
+        person: Detection,
+        frame_w: int,
+        frame_h: int,
+    ) -> None:
         pid = person.track_id
 
-        def emit(pos_name: str, neg_name: Optional[str], key: Tuple, obs: float, zone: Box) -> PPEState:
+        def emit(pos_name: str, neg_name: str | None, key: tuple, obs: float, zone: Box) -> PPEState:
             state, score, box = self.smoother.update(key, obs, zone)
             box = box or zone
             if state is PPEState.PRESENT:
@@ -273,7 +286,11 @@ class HybridEPIDetector(IDetector):
             pos, neg, mbox = self._evidence(model_dets, head_zone, {"helmet"}, {"no_helmet"}, frame_w, frame_h)
             heur = None if h_det is None else h_det.class_name == "helmet"
             # Evita que 'no_helmet' fraco do modelo externo sobrescreva capacete confirmado pela Pose (ex.: verde/distante)
-            effective_neg = 0.0 if (heur is True and h_det is not None and h_det.confidence >= 0.26 and pos == 0.0 and neg < 0.70) else neg
+            effective_neg = (
+                0.0
+                if (heur is True and h_det is not None and h_det.confidence >= 0.26 and pos == 0.0 and neg < 0.70)
+                else neg
+            )
             obs = fuse_evidence(pos, effective_neg, heur, has_negative_class=True)
             emit("helmet", "no_helmet", (tid, "helmet"), obs, mbox if (mbox and pos >= effective_neg) else head_zone)
 
@@ -317,10 +334,22 @@ class HybridEPIDetector(IDetector):
             for d in model_dets:
                 if d.class_name == "gloves" and d.confidence >= 0.45:
                     side = "L" if (d.bbox[0] + d.bbox[2]) / 2.0 < cx_person else "R"
-                    emit("gloves", "no_gloves", (tid, f"gloves_{side}"), fuse_evidence(d.confidence, 0.0, None, True), d.bbox)
+                    emit(
+                        "gloves",
+                        "no_gloves",
+                        (tid, f"gloves_{side}"),
+                        fuse_evidence(d.confidence, 0.0, None, True),
+                        d.bbox,
+                    )
                 elif d.class_name == "no_gloves" and d.confidence >= 0.55:
                     side = "L" if (d.bbox[0] + d.bbox[2]) / 2.0 < cx_person else "R"
-                    emit("gloves", "no_gloves", (tid, f"gloves_{side}"), fuse_evidence(0.0, d.confidence, None, True), d.bbox)
+                    emit(
+                        "gloves",
+                        "no_gloves",
+                        (tid, f"gloves_{side}"),
+                        fuse_evidence(0.0, d.confidence, None, True),
+                        d.bbox,
+                    )
 
     # ---------------------------------------------------------- IDetector proxy
     def reset_tracking(self) -> None:

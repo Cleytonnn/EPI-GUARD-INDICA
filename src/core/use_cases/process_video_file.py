@@ -4,20 +4,21 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
+
 import numpy as np
 
 from src.core.domain.vehicle_metadata import VehicleMetadata
-from src.core.domain.violation import Violation
-from src.core.interfaces.detector import IDetector
-from src.core.interfaces.video_reader import IVideoReader
 from src.core.interfaces.alert_storage import IAlertStorage
-from src.core.interfaces.report_repo import IViolationReportRepository
-from src.core.interfaces.processed_repo import IProcessedVideosRepository
+from src.core.interfaces.detector import IDetector
 from src.core.interfaces.notifier import INotifier
+from src.core.interfaces.processed_repo import IProcessedVideosRepository
+from src.core.interfaces.report_repo import IViolationReportRepository
 from src.core.interfaces.training_collector import ITrainingSampleCollector
+from src.core.interfaces.video_reader import IVideoReader
 from src.core.services.compliance_service import ComplianceService
 from src.presentation.cli.visualizer import draw_detections, draw_vehicle_metadata
 
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class VideoProcessingResult:
     """Resultado estruturado da execução da análise de um vídeo."""
+
     success: bool
     video_path: str
     plate: str
@@ -34,8 +36,8 @@ class VideoProcessingResult:
     duration_seconds: float
     elapsed_seconds: float
     violations_count: int
-    violations: List[Dict[str, Any]]
-    error: Optional[str] = None
+    violations: list[dict[str, Any]]
+    error: str | None = None
 
 
 class ProcessVideoFileUseCase:
@@ -48,9 +50,9 @@ class ProcessVideoFileUseCase:
         alert_storage: IAlertStorage,
         report_repo: IViolationReportRepository,
         processed_repo: IProcessedVideosRepository,
-        notifier: Optional[INotifier] = None,
-        reader_factory: Optional[Callable[[Path | str], IVideoReader]] = None,
-        training_collector: Optional[ITrainingSampleCollector] = None,
+        notifier: INotifier | None = None,
+        reader_factory: Callable[[Path | str], IVideoReader] | None = None,
+        training_collector: ITrainingSampleCollector | None = None,
     ):
         self.detector = detector
         self.compliance_service = compliance_service
@@ -64,9 +66,9 @@ class ProcessVideoFileUseCase:
     def execute(
         self,
         video_path: Path | str,
-        root_dir: Optional[Path | str] = None,
+        root_dir: Path | str | None = None,
         skip_frames: int = 3,
-        on_frame_callback: Optional[Callable[[np.ndarray, List[Any], int, int], None]] = None,
+        on_frame_callback: Callable[[np.ndarray, list[Any], int, int], None] | None = None,
     ) -> VideoProcessingResult:
         """Executa a análise frame a frame do vídeo."""
         path_obj = Path(video_path).resolve()
@@ -84,6 +86,7 @@ class ProcessVideoFileUseCase:
             reader = self.reader_factory(path_obj)
         else:
             from src.infrastructure.video.universal_reader import UniversalVideoReader
+
             reader = UniversalVideoReader(path_obj)
 
         if not reader.is_opened():
@@ -113,7 +116,7 @@ class ProcessVideoFileUseCase:
             self.training_collector.start_session(metadata.video_name)
 
         frame_idx = 0
-        violations_found: List[Dict[str, Any]] = []
+        violations_found: list[dict[str, Any]] = []
         start_time = time.time()
         skip_n = max(1, skip_frames)
 
@@ -163,14 +166,16 @@ class ProcessVideoFileUseCase:
                         if self.notifier:
                             self.notifier.notify(viol, image_path=saved_path)
 
-                        violations_found.append({
-                            "type": viol.violation_type,
-                            "desc": viol.description,
-                            "time": current_meta.video_time_str,
-                            "second": video_second,
-                            "confidence": viol.confidence,
-                            "image": saved_path,
-                        })
+                        violations_found.append(
+                            {
+                                "type": viol.violation_type,
+                                "desc": viol.description,
+                                "time": current_meta.video_time_str,
+                                "second": video_second,
+                                "confidence": viol.confidence,
+                                "image": saved_path,
+                            }
+                        )
 
                 # Callback visual opcional
                 if on_frame_callback:

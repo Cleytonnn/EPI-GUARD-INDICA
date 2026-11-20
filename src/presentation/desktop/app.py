@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import logging
-import sys
-from typing import Optional
+
 import customtkinter as ctk
 
 from src.container import Container
@@ -14,11 +13,8 @@ from src.presentation.desktop.theme import (
     BORDER_COLOR,
     COLOR_PRIMARY,
     COLOR_SUCCESS,
-    FONT_BODY,
     FONT_BODY_BOLD,
-    FONT_HEADING,
     FONT_SMALL,
-    FONT_SUBTITLE,
     FONT_TITLE,
     TEXT_MUTED,
     TEXT_PRIMARY,
@@ -35,6 +31,7 @@ logger = logging.getLogger(__name__)
 # Tentar integrar com o TkinterDnD para suporte nativo a Drag & Drop em toda a janela
 try:
     from tkinterdnd2 import TkinterDnD
+
     BaseAppClass = type("BaseAppClass", (ctk.CTk, TkinterDnD.DnDWrapper), {})
 except Exception:
     BaseAppClass = ctk.CTk
@@ -43,7 +40,7 @@ except Exception:
 class PPEComplianceDesktopApp(BaseAppClass):
     """Janela principal do aplicativo Desktop de Detecção e Conformidade de EPI."""
 
-    def __init__(self, container: Optional[Container] = None):
+    def __init__(self, container: Container | None = None):
         super().__init__()
         if hasattr(self, "TkdndVersion") is False and "TkinterDnD" in globals():
             try:
@@ -62,7 +59,7 @@ class PPEComplianceDesktopApp(BaseAppClass):
         self.minsize(1050, 680)
         self.configure(fg_color=BG_MAIN)
 
-        self._current_view: Optional[ctk.CTkFrame] = None
+        self._current_view: ctk.CTkFrame | None = None
         self._nav_buttons = {}
 
         self._build_layout()
@@ -112,7 +109,7 @@ class PPEComplianceDesktopApp(BaseAppClass):
             ("training_review", "🧠 Revisão p/ Treino", "Confirme frames para retreinar a IA"),
         ]
 
-        for view_key, title, subtitle in nav_items:
+        for view_key, title, _subtitle in nav_items:
             btn_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
             btn_frame.pack(fill="x", padx=12, pady=4)
 
@@ -213,7 +210,7 @@ class PPEComplianceDesktopApp(BaseAppClass):
         self._current_view.grid(row=0, column=0, sticky="nsew")
 
 
-def run_desktop_app(container: Optional[Container] = None) -> None:
+def run_desktop_app(container: Container | None = None) -> None:
     """Inicia a aplicação desktop em loop de eventos da interface gráfica."""
     app = PPEComplianceDesktopApp(container=container)
     app.mainloop()

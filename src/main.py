@@ -9,15 +9,13 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from pathlib import Path
-from typing import Optional
 
 from src.container import Container
 from src.presentation.cli.commands import (
     run_batch_command,
-    run_watch_command,
     run_live_stream_command,
     run_test_email_command,
+    run_watch_command,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,8 +24,9 @@ logger = logging.getLogger(__name__)
 class PPEMonitor:
     """Fachada retrocompatível para monitoramento ao vivo."""
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         from src.config.settings import AppSettings
+
         settings = AppSettings.load(config_path)
         self.container = Container(settings)
 
@@ -36,7 +35,7 @@ class PPEMonitor:
         self.alerter = self.container.alert_storage
         self.compliance = self.container.compliance_service
 
-    def run(self, source: Optional[int | str] = None, no_display: bool = False) -> None:
+    def run(self, source: int | str | None = None, no_display: bool = False) -> None:
         run_live_stream_command(self.container, source=source, no_display=no_display)
 
 
@@ -64,6 +63,7 @@ def main():
     args = parser.parse_args()
 
     from src.config.settings import AppSettings
+
     settings = AppSettings.load(args.config)
     if args.confidence is not None:
         settings.detection.confidence = args.confidence

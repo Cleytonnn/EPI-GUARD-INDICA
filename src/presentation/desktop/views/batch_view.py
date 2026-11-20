@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 import threading
 import time
-from typing import Optional
+from pathlib import Path
 from tkinter import filedialog
+
 import customtkinter as ctk
 
 from src.container import Container
@@ -23,7 +22,6 @@ from src.presentation.desktop.theme import (
     FONT_BODY_BOLD,
     FONT_SMALL,
     FONT_TITLE,
-    TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
 )

@@ -1,0 +1,7 @@
+# Normaliza finais de linha (alinhado ao .editorconfig)
+* text=auto eol=lf
+*.bat text eol=crlf
+*.pt binary
+*.mp4 binary
+*.jpg binary
+*.png binary

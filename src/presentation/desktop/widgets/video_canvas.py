@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from typing import Optional, Tuple
+
 import cv2
 import numpy as np
 from PIL import Image, ImageTk
@@ -26,9 +26,9 @@ class VideoCanvas(tk.Canvas):
         )
         self.target_width = width
         self.target_height = height
-        self._photo_image: Optional[ImageTk.PhotoImage] = None
-        self._image_item: Optional[int] = None
-        self._placeholder_text: Optional[int] = None
+        self._photo_image: ImageTk.PhotoImage | None = None
+        self._image_item: int | None = None
+        self._placeholder_text: int | None = None
         self.show_placeholder("Nenhum vídeo em reprodução")
 
         self.bind("<Configure>", self._on_resize)

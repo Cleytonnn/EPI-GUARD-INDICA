@@ -1,6 +1,7 @@
 """Testes unitários do Value Object VehicleMetadata."""
 
 from pathlib import Path
+
 from src.core.domain.vehicle_metadata import VehicleMetadata
 
 

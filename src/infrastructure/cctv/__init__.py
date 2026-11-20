@@ -7,4 +7,3 @@ from src.infrastructure.cctv.camera_api_client import (
 )
 
 __all__ = ["CameraAPIClient", "RemoteCameraConfig", "load_cameras_config"]
-
