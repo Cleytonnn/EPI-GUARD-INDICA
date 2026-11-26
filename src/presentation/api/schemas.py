@@ -40,7 +40,9 @@ class FrameAnalysisResponse(BaseModel):
 class Base64AnalyzeRequest(BaseModel):
     """Payload de imagem em Base64."""
 
-    image_base64: str = Field(..., description="String Base64 da imagem (com ou sem prefixo data:image/jpeg;base64)")
+    image_base64: str = Field(
+        ..., min_length=1, description="String Base64 da imagem (com ou sem prefixo data:image/jpeg;base64)"
+    )
     camera_id: str | None = Field("cam_default", description="Identificador único da câmera ou veículo")
     check_compliance: bool = Field(True, description="Se True, aplica motor de conformidade temporal")
 

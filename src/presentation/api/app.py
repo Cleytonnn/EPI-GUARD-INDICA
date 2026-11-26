@@ -32,14 +32,15 @@ def create_app(container: Container | None = None) -> FastAPI:
         redoc_url="/redoc",
     )
 
-    # Configuração de CORS
+    # Configuração de CORS restrito
     cors_origins = app_container.settings.api.cors_origins
+    allow_credentials = bool(cors_origins) and "*" not in cors_origins
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=allow_credentials,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Authorization", "Content-Type", "X-API-Key"],
     )
 
     # Registro de rotas (adiciona as rotas diretamente para compatibilidade de inspeção e OpenAPI limpo)

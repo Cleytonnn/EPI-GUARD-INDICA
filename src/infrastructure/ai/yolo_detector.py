@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+from contextlib import nullcontext
 from pathlib import Path
 
 import numpy as np
@@ -31,6 +33,7 @@ class YOLODetector(IDetector):
         self.iou_threshold = float(iou_threshold)
         self.imgsz = int(imgsz)
         self.track = bool(track)
+        self._lock = threading.RLock()
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._load_model()
@@ -48,6 +51,11 @@ class YOLODetector(IDetector):
         if frame is None or frame.size == 0:
             return []
 
+        lock = getattr(self, "_lock", None) or nullcontext()
+        with lock:
+            return self._detect_locked(frame)
+
+    def _detect_locked(self, frame: np.ndarray) -> list[Detection]:
         try:
             if self.track:
                 results = self.model.track(
@@ -105,13 +113,15 @@ class YOLODetector(IDetector):
 
     def reset_tracking(self) -> None:
         """Reseta o rastreamento interno do ByteTrack para um novo vídeo/stream."""
-        try:
-            if hasattr(self.model, "predictor") and self.model.predictor is not None:
-                if hasattr(self.model.predictor, "trackers"):
-                    delattr(self.model.predictor, "trackers")
-            logger.debug("🔄 Tracking do modelo resetado.")
-        except Exception:
-            pass
+        lock = getattr(self, "_lock", None) or nullcontext()
+        with lock:
+            try:
+                if hasattr(self.model, "predictor") and self.model.predictor is not None:
+                    if hasattr(self.model.predictor, "trackers"):
+                        delattr(self.model.predictor, "trackers")
+                logger.debug("🔄 Tracking do modelo resetado.")
+            except Exception:
+                pass
 
     @property
     def confidence(self) -> float:
@@ -119,7 +129,9 @@ class YOLODetector(IDetector):
 
     @confidence.setter
     def confidence(self, value: float) -> None:
-        self._confidence = float(value)
+        lock = getattr(self, "_lock", None) or nullcontext()
+        with lock:
+            self._confidence = float(value)
 
     @property
     def class_names(self) -> dict[int, str]:

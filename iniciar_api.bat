@@ -18,15 +18,20 @@ exit /b 1
 
 :INICIAR_API
 call .venv\Scripts\activate.bat
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERRO] Falha ao ativar o ambiente virtual.
+    pause
+    exit /b 1
+)
 echo =======================================================================
-echo Iniciando Servidor de API FastAPI em http://localhost:8000
-echo Documentacao Swagger disponivel em http://localhost:8000/docs
+echo Iniciando Servidor de API FastAPI em http://127.0.0.1:8000
+echo Documentacao Swagger disponivel em http://127.0.0.1:8000/docs
 echo CRIADO POR CLEYTON BAUMGRATZ
 echo Pressione CTRL+C para encerrar o servidor.
 echo =======================================================================
 echo.
 
-python -m uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+python -m src.api --host 127.0.0.1 --port 8000
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

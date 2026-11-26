@@ -13,6 +13,9 @@ Inspirado nas soluções de visão computacional anatômica (ex: EPI-Detect):
 from __future__ import annotations
 
 import logging
+import tempfile
+import threading
+from contextlib import nullcontext
 from pathlib import Path
 
 import cv2
@@ -49,6 +52,17 @@ KNEE_L, KNEE_R = 13, 14
 ANKLE_L, ANKLE_R = 15, 16
 
 
+def is_git_lfs_pointer(path: str | Path) -> bool:
+    """Verifica se o arquivo é um ponteiro de texto Git LFS não baixado."""
+    try:
+        p = Path(path)
+        if not p.is_file() or p.stat().st_size > 1024:
+            return False
+        return p.read_bytes()[:128].startswith(b"version https://git-lfs.github.com/spec/v1")
+    except OSError:
+        return False
+
+
 class PoseEPIDetector(IDetector):
     """Implementa IDetector utilizando YOLO-Pose e análise anatômica de EPIs."""
 
@@ -78,13 +92,23 @@ class PoseEPIDetector(IDetector):
         self.gloves_skin_threshold = gloves_skin_threshold
         self.only_company_workers = bool(only_company_workers)
         self.is_cabin = bool(is_cabin)
+        self._lock = threading.RLock()
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._load_model()
 
     def _load_model(self) -> None:
-        logger.info(f"🦾 Carregando YOLO-Pose em [{self.device.upper()}]: {self.model_path}")
-        self.model = YOLO(self.model_path)
+        target_path = self.model_path
+        if is_git_lfs_pointer(target_path):
+            fallback = Path(tempfile.gettempdir()) / Path(target_path).name
+            logger.warning(
+                "⚠️ Modelo '%s' é um ponteiro Git LFS (execute 'git lfs pull'). Usando fallback em '%s'.",
+                target_path,
+                fallback,
+            )
+            target_path = str(fallback)
+        logger.info(f"🦾 Carregando YOLO-Pose em [{self.device.upper()}]: {target_path}")
+        self.model = YOLO(target_path)
         logger.info("🦾 Modelo YOLO-Pose inicializado com sucesso.")
 
     def _get_keypoint(self, kps: np.ndarray, index: int, min_conf: float = 0.35) -> tuple[int, int] | None:
@@ -386,6 +410,11 @@ class PoseEPIDetector(IDetector):
         if frame is None or frame.size == 0:
             return []
 
+        lock = getattr(self, "_lock", None) or nullcontext()
+        with lock:
+            return self._detect_locked(frame)
+
+    def _detect_locked(self, frame: np.ndarray) -> list[Detection]:
         frame_h, frame_w = frame.shape[:2]
 
         try:
@@ -634,13 +663,15 @@ class PoseEPIDetector(IDetector):
 
     def reset_tracking(self) -> None:
         """Reseta o rastreamento interno do ByteTrack para um novo vídeo/stream."""
-        try:
-            if hasattr(self.model, "predictor") and self.model.predictor is not None:
-                if hasattr(self.model.predictor, "trackers"):
-                    delattr(self.model.predictor, "trackers")
-            logger.debug("🔄 Tracking do modelo Pose resetado.")
-        except Exception:
-            pass
+        lock = getattr(self, "_lock", None) or nullcontext()
+        with lock:
+            try:
+                if hasattr(self.model, "predictor") and self.model.predictor is not None:
+                    if hasattr(self.model.predictor, "trackers"):
+                        delattr(self.model.predictor, "trackers")
+                logger.debug("🔄 Tracking do modelo Pose resetado.")
+            except Exception:
+                pass
 
     @property
     def confidence(self) -> float:
@@ -648,7 +679,9 @@ class PoseEPIDetector(IDetector):
 
     @confidence.setter
     def confidence(self, value: float) -> None:
-        self._confidence = float(value)
+        lock = getattr(self, "_lock", None) or nullcontext()
+        with lock:
+            self._confidence = float(value)
 
     @property
     def class_names(self) -> dict[int, str]:

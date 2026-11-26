@@ -7,14 +7,25 @@ provendo validação e acesso tipado em todas as camadas.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
+from typing import Any, TypeVar
 
 import yaml
 from dotenv import load_dotenv
 
 # Diretório raiz do projeto
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+
+_T = TypeVar("_T")
+
+
+def _build_dataclass(cls_type: type[_T], raw_data: dict[str, Any] | None) -> _T:
+    """Instancia uma dataclass filtrando apenas campos declarados (incluindo default_factory)."""
+    data = raw_data if isinstance(raw_data, dict) else {}
+    valid_keys = {f.name for f in fields(cls_type)}
+    filtered = {k: v for k, v in data.items() if k in valid_keys and v is not None}
+    return cls_type(**filtered)
 
 
 @dataclass
@@ -116,9 +127,11 @@ class ActiveLearningConfig:
 class ApiConfig:
     """Configurações da API REST."""
 
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8000
-    cors_origins: list[str] = field(default_factory=lambda: ["*"])
+    cors_origins: list[str] = field(default_factory=lambda: ["http://localhost:8000", "http://127.0.0.1:8000"])
+    api_key: str | None = None
+    max_upload_mb: int = 10
 
 
 @dataclass
@@ -152,14 +165,23 @@ class AppSettings:
                 raw_data = {}
 
         # Mapeamento e instanciação tipada
-        cam_data = raw_data.get("camera", {})
-        det_data = raw_data.get("detection", {})
-        comp_data = raw_data.get("compliance", {})
-        alert_data = raw_data.get("alerts", {})
-        disp_data = raw_data.get("display", {})
-        batch_data = raw_data.get("video_batch", {})
-        api_data = raw_data.get("api", {})
-        al_data = raw_data.get("active_learning", {}) or {}
+        cam_data = raw_data.get("camera") or {}
+        det_data = raw_data.get("detection") or {}
+        comp_data = raw_data.get("compliance") or {}
+        alert_data = raw_data.get("alerts") or {}
+        disp_data = raw_data.get("display") or {}
+        batch_data = raw_data.get("video_batch") or {}
+        api_data = dict(raw_data.get("api") or {})
+        al_data = raw_data.get("active_learning") or {}
+
+        if env_host := os.getenv("API_HOST"):
+            api_data["host"] = env_host
+        if env_port := os.getenv("API_PORT"):
+            api_data["port"] = int(env_port)
+        if env_key := os.getenv("API_KEY"):
+            api_data["api_key"] = env_key
+        if env_cors := os.getenv("CORS_ORIGINS"):
+            api_data["cors_origins"] = [o.strip() for o in env_cors.split(",") if o.strip()]
 
         alerts_cfg = AlertConfig(
             save_images=alert_data.get("save_images", True),
@@ -175,14 +197,12 @@ class AppSettings:
         )
 
         return cls(
-            camera=CameraConfig(**{k: v for k, v in cam_data.items() if hasattr(CameraConfig, k)}),
-            detection=DetectionConfig(**{k: v for k, v in det_data.items() if hasattr(DetectionConfig, k)}),
-            compliance=ComplianceConfig(**{k: v for k, v in comp_data.items() if hasattr(ComplianceConfig, k)}),
+            camera=_build_dataclass(CameraConfig, cam_data),
+            detection=_build_dataclass(DetectionConfig, det_data),
+            compliance=_build_dataclass(ComplianceConfig, comp_data),
             alerts=alerts_cfg,
-            display=DisplayConfig(**{k: v for k, v in disp_data.items() if hasattr(DisplayConfig, k)}),
-            video_batch=VideoBatchConfig(**{k: v for k, v in batch_data.items() if hasattr(VideoBatchConfig, k)}),
-            api=ApiConfig(**{k: v for k, v in api_data.items() if hasattr(ApiConfig, k)}),
-            active_learning=ActiveLearningConfig(
-                **{k: v for k, v in al_data.items() if hasattr(ActiveLearningConfig, k)}
-            ),
+            display=_build_dataclass(DisplayConfig, disp_data),
+            video_batch=_build_dataclass(VideoBatchConfig, batch_data),
+            api=_build_dataclass(ApiConfig, api_data),
+            active_learning=_build_dataclass(ActiveLearningConfig, al_data),
         )

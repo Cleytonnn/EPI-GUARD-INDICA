@@ -77,8 +77,9 @@ class ComplianceService:
         metadata: VehicleMetadata | None = None,
     ) -> list[Violation]:
         """Avalia as detecções do frame atual e retorna violações confirmadas."""
+        self._current_frame_keys.clear()
         if not detections:
-            # Reduz contadores de ausências que sumiram
+            # Zera contadores de ausências que sumiram
             self._decay_counters()
             return []
 
@@ -185,21 +186,33 @@ class ComplianceService:
                         )
 
         confirmed: list[Violation] = []
-        self._current_frame_keys.clear()
 
-        # Identifica civis para descartar qualquer alerta em transeuntes na rua
-        civil_tracks = {d.track_id for d in active_detections if d.class_name == "civil"}
+        # Identifica civis com tracking válido para descartar alertas em transeuntes na rua
+        # (civis sem track_id / -1 nunca devem silenciar trabalhadores sem track_id)
+        civil_tracks = {
+            d.track_id
+            for d in active_detections
+            if d.class_name == "civil" and d.track_id is not None and d.track_id >= 0
+        }
 
+        # Deduplica por (track_id, class_name) dentro do mesmo frame para evitar contagem dupla
+        # (ex.: duas mãos sem luva ou múltiplas detecções sem tracking no mesmo frame)
+        frame_candidates: dict[tuple, Detection] = {}
         for det in active_detections:
             if det.class_name not in self.violation_classes:
                 continue
 
             # Se for civil na rua, descarta violação
             if self.only_company_workers and not is_cabin:
-                if det.track_id in civil_tracks:
+                if det.track_id is not None and det.track_id in civil_tracks:
                     continue
 
             key = (det.track_id, det.class_name)
+            prev = frame_candidates.get(key)
+            if prev is None or det.confidence > prev.confidence:
+                frame_candidates[key] = det
+
+        for key, det in frame_candidates.items():
             self._current_frame_keys.add(key)
             self._violation_counter[key] += 1
             self._confidence_sum[key] += det.confidence

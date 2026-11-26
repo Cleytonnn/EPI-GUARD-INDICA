@@ -7,17 +7,23 @@ integrando-se aos serviços de domínio e armazenamento da Clean Architecture.
 from __future__ import annotations
 
 import base64
+import binascii
 import logging
+import os
+import re
+import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
 import requests
 import yaml
+from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 
 from src.config.settings import ROOT_DIR
@@ -72,6 +78,7 @@ class CameraAPIClient:
         self.max_workers = max_workers
 
         self._running = False
+        self._lock = threading.Lock()
         self._sessions: dict[str, requests.Session] = {}
         self._stats = {
             "total_requests": 0,
@@ -102,9 +109,14 @@ class CameraAPIClient:
         logger.info(f"📹 {len(self.cameras)} câmera(s) remota(s) configurada(s) via API")
 
     def _get_compliance_service(self, camera_id: str) -> ComplianceService:
-        if camera_id not in self.compliance_checkers:
-            self.compliance_checkers[camera_id] = self.compliance_factory()
-        return self.compliance_checkers[camera_id]
+        with self._lock:
+            if camera_id not in self.compliance_checkers:
+                self.compliance_checkers[camera_id] = self.compliance_factory()
+            return self.compliance_checkers[camera_id]
+
+    def _inc_stat(self, key: str, delta: int = 1) -> None:
+        with self._lock:
+            self._stats[key] += delta
 
     def fetch_snapshot(self, camera_id: str) -> np.ndarray | None:
         """Busca um snapshot de uma câmera via HTTP e decodifica para BGR."""
@@ -121,7 +133,7 @@ class CameraAPIClient:
                 response = session.get(cam.url, timeout=cam.timeout)
 
             response.raise_for_status()
-            self._stats["total_requests"] += 1
+            self._inc_stat("total_requests")
 
             content_type = response.headers.get("Content-Type", "")
 
@@ -145,7 +157,11 @@ class CameraAPIClient:
                 if isinstance(image_data, str) and "," in image_data:
                     image_data = image_data.split(",", 1)[1]
 
-                img_bytes = base64.b64decode(image_data)
+                try:
+                    img_bytes = base64.b64decode(re.sub(r"\s+", "", str(image_data)), validate=True)
+                except (binascii.Error, ValueError):
+                    logger.error(f"❌ [{camera_id}] Base64 inválido recebido da câmera")
+                    return None
                 img_array = np.frombuffer(img_bytes, np.uint8)
                 frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
             else:
@@ -160,17 +176,17 @@ class CameraAPIClient:
 
         except requests.exceptions.Timeout:
             logger.warning(f"⏱️ [{camera_id}] Timeout ao buscar snapshot")
-            self._stats["total_errors"] += 1
+            self._inc_stat("total_errors")
         except requests.exceptions.ConnectionError:
             logger.warning(f"🔌 [{camera_id}] Erro de conexão: {cam.url}")
-            self._stats["total_errors"] += 1
+            self._inc_stat("total_errors")
         except requests.exceptions.HTTPError as e:
             code = e.response.status_code if e.response is not None else "?"
             logger.warning(f"❌ [{camera_id}] HTTP {code}: {e}")
-            self._stats["total_errors"] += 1
+            self._inc_stat("total_errors")
         except Exception as e:
             logger.error(f"❌ [{camera_id}] Erro inesperado: {e}")
-            self._stats["total_errors"] += 1
+            self._inc_stat("total_errors")
 
         return None
 
@@ -181,13 +197,13 @@ class CameraAPIClient:
 
         detections = self.detector.detect(frame, skip_frames=1)
         if detections:
-            self._stats["total_detections"] += len(detections)
+            self._inc_stat("total_detections", len(detections))
 
         checker = self._get_compliance_service(camera_id)
         violations = checker.check(detections)
 
         if violations:
-            self._stats["total_violations"] += len(violations)
+            self._inc_stat("total_violations", len(violations))
             annotated = draw_detections(frame, detections)
             for viol in violations:
                 logger.warning(f"🚨 [{camera_id}] {viol.description}")
@@ -246,18 +262,38 @@ class CameraAPIClient:
         logger.info("=" * 60)
 
 
+_ENV_VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-(.*?))?\}")
+
+
+def _expand_env_vars(value: Any) -> Any:
+    """Expande placeholders ${VAR} ou ${VAR:-padrao} recursivamente a partir do ambiente."""
+    if isinstance(value, str):
+        return _ENV_VAR_RE.sub(
+            lambda m: os.getenv(m.group(1)) if os.getenv(m.group(1)) is not None else (m.group(2) or ""),
+            value,
+        )
+    if isinstance(value, list):
+        return [_expand_env_vars(item) for item in value]
+    if isinstance(value, dict):
+        return {k: _expand_env_vars(v) for k, v in value.items()}
+    return value
+
+
 def load_cameras_config(config_path: str | Path | None = None) -> list[RemoteCameraConfig]:
     """Carrega a lista de câmeras remotas a partir de config/cameras.yaml."""
+    load_dotenv(override=False)
     target = Path(config_path) if config_path is not None else ROOT_DIR / "config" / "cameras.yaml"
     if not target.exists():
         logger.error(f"❌ Arquivo de câmeras não encontrado: {target}")
         return []
 
     with open(target, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+        raw = yaml.safe_load(f) or {}
+
+    data = _expand_env_vars(raw)
 
     cameras: list[RemoteCameraConfig] = []
-    for cam_data in data.get("cameras", []):
+    for cam_data in data.get("cameras") or []:
         cameras.append(
             RemoteCameraConfig(
                 camera_id=cam_data["camera_id"],

@@ -14,6 +14,8 @@ Fluxo por frame:
 from __future__ import annotations
 
 import logging
+import threading
+from contextlib import nullcontext
 from pathlib import Path
 
 import numpy as np
@@ -118,12 +120,14 @@ class HybridEPIDetector(IDetector):
         ppe_model=None,
     ):
         self.pose = pose_detector
+        self.ppe_model_path = str(ppe_model_path)
         self.ppe_confidence = float(ppe_confidence)
         self.ppe_iou = float(ppe_iou)
         self.ppe_imgsz = int(ppe_imgsz)
         self.crop_padding = float(crop_padding)
         self.smoother = smoother or PPEStateSmoother()
         self._worker_grace: dict[int, int] = {}
+        self._lock = threading.RLock()
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         if ppe_model is not None:
@@ -211,6 +215,11 @@ class HybridEPIDetector(IDetector):
 
     # ------------------------------------------------------------------- detect
     def detect(self, frame: np.ndarray, skip_frames: int = 1) -> list[Detection]:
+        lock = getattr(self, "_lock", None) or nullcontext()
+        with lock:
+            return self._detect_locked(frame, skip_frames)
+
+    def _detect_locked(self, frame: np.ndarray, skip_frames: int = 1) -> list[Detection]:
         base = self.pose.detect(frame, skip_frames)
         self.smoother.begin_frame()
         if frame is None or frame.size == 0 or not base:
@@ -364,9 +373,25 @@ class HybridEPIDetector(IDetector):
 
     # ---------------------------------------------------------- IDetector proxy
     def reset_tracking(self) -> None:
-        self.pose.reset_tracking()
-        self.smoother.reset()
-        self._worker_grace.clear()
+        lock = getattr(self, "_lock", None) or nullcontext()
+        with lock:
+            self.pose.reset_tracking()
+            self.smoother.reset()
+            self._worker_grace.clear()
+
+    @property
+    def model_path(self) -> str:
+        pose_path = getattr(self.pose, "model_path", None)
+        return f"{pose_path} + {self.ppe_model_path}" if pose_path else self.ppe_model_path
+
+    @property
+    def is_cabin(self) -> bool:
+        return bool(getattr(self.pose, "is_cabin", False))
+
+    @is_cabin.setter
+    def is_cabin(self, value: bool) -> None:
+        if hasattr(self.pose, "is_cabin"):
+            self.pose.is_cabin = bool(value)
 
     @property
     def confidence(self) -> float:
@@ -374,7 +399,9 @@ class HybridEPIDetector(IDetector):
 
     @confidence.setter
     def confidence(self, value: float) -> None:
-        self.pose.confidence = value
+        lock = getattr(self, "_lock", None) or nullcontext()
+        with lock:
+            self.pose.confidence = value
 
     @property
     def class_names(self) -> dict:

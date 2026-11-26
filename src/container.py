@@ -18,7 +18,7 @@ from src.core.use_cases.process_stream import ProcessLiveStreamUseCase
 from src.core.use_cases.process_video_file import ProcessVideoFileUseCase
 from src.core.use_cases.watch_directory import WatchDirectoryUseCase
 from src.infrastructure.ai.hybrid_detector import HybridEPIDetector
-from src.infrastructure.ai.pose_detector import PoseEPIDetector
+from src.infrastructure.ai.pose_detector import PoseEPIDetector, is_git_lfs_pointer
 from src.infrastructure.ai.yolo_detector import YOLODetector
 from src.infrastructure.notifications.composite_notifier import CompositeNotifier
 from src.infrastructure.notifications.email_notifier import EmailNotifier
@@ -92,12 +92,7 @@ class Container:
         self.video_reader_factory = lambda path: UniversalVideoReader(path)
 
         # 6. Serviços de Domínio
-        self.compliance_service = ComplianceService(
-            required_ppe=self.settings.compliance.required_ppe,
-            violation_classes=self.settings.compliance.violation_classes,
-            min_violation_frames=self.settings.compliance.min_violation_frames,
-            infer_missing_ppe=(backend != "hybrid"),
-        )
+        self.compliance_service = self.create_compliance_service()
 
         # 6.1 Aprendizado Ativo - coleta de frames para revisão e retreino
         al_cfg = self.settings.active_learning
@@ -136,6 +131,7 @@ class Container:
         self.analyze_frame_uc = AnalyzeFrameUseCase(
             detector=self.detector,
             compliance_service=self.compliance_service,
+            compliance_factory=self.create_compliance_service,
         )
 
         self.process_stream_uc = ProcessLiveStreamUseCase(
@@ -146,8 +142,17 @@ class Container:
             training_collector=self.training_collector,
         )
 
+    def create_compliance_service(self) -> ComplianceService:
+        """Cria um ComplianceService configurado de acordo com o detector ativo."""
+        return ComplianceService(
+            required_ppe=self.settings.compliance.required_ppe,
+            violation_classes=self.settings.compliance.violation_classes,
+            min_violation_frames=self.settings.compliance.min_violation_frames,
+            infer_missing_ppe=not isinstance(self.detector, HybridEPIDetector),
+        )
+
     def _build_hybrid(self, pose_detector: PoseEPIDetector):
-        """Cria o detector híbrido; recua para Pose puro se o modelo de EPIs não existir."""
+        """Cria o detector híbrido; recua para Pose puro se o modelo de EPIs não existir ou for ponteiro LFS."""
         det = self.settings.detection
         model_path = Path(det.ppe_model_path)
         if not model_path.is_absolute():
@@ -159,20 +164,34 @@ class Container:
                 model_path,
             )
             return pose_detector
+        if is_git_lfs_pointer(model_path):
+            logger.warning(
+                "Modelo de EPIs '%s' é um ponteiro Git LFS (rode 'git lfs pull') — usando apenas Pose/heurística.",
+                model_path,
+            )
+            return pose_detector
         smoother = PPEStateSmoother(
             alpha=det.smoothing_alpha,
             present_on=det.present_threshold,
             absent_on=det.absent_threshold,
             min_observations=det.smoothing_min_obs,
         )
-        return HybridEPIDetector(
-            pose_detector=pose_detector,
-            ppe_model_path=model_path,
-            ppe_confidence=det.ppe_confidence,
-            ppe_imgsz=det.ppe_imgsz,
-            crop_padding=det.crop_padding,
-            smoother=smoother,
-        )
+        try:
+            return HybridEPIDetector(
+                pose_detector=pose_detector,
+                ppe_model_path=model_path,
+                ppe_confidence=det.ppe_confidence,
+                ppe_imgsz=det.ppe_imgsz,
+                crop_padding=det.crop_padding,
+                smoother=smoother,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Falha ao carregar modelo de EPIs '%s' (%s) — usando apenas Pose/heurística.",
+                model_path,
+                exc,
+            )
+            return pose_detector
 
     def create_camera_stream(self, source: int | str | None = None) -> CameraStream:
         """Cria uma instância de stream de câmera com a fonte fornecida ou configurada."""

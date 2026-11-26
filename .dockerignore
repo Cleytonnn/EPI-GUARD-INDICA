@@ -1,0 +1,50 @@
+# Controle de versão e ambientes locais
+.git/
+.gitignore
+.gitattributes
+.venv/
+venv/
+env/
+ENV/
+
+# Caches e artefatos Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Segredos e variáveis locais
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dados pesados, gravações, datasets e saídas de execução
+gravacoes/
+datasets/
+runs/
+weights/
+alertas/
+videos_processados.json
+relatorio_infracoes.csv
+*.log
+*.265
+*.h265
+*.hevc
+*.mp4
+*.avi
+*.mkv
+*_vlc_clean.mp4
+
+# IDEs, build e documentação de auditoria
+.vscode/
+.idea/
+dist/
+build/
+*.egg-info/

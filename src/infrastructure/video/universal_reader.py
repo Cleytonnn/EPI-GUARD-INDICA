@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import tempfile
+import uuid
 from pathlib import Path
 
 import cv2
@@ -27,6 +29,7 @@ class UniversalVideoReader(IVideoReader):
         self._container = None
         self._stream = None
         self._frame_generator = None
+        self._temp_remux_path: Path | None = None
 
         self._fps: float = 25.0
         self._total_frames: int = 0
@@ -76,30 +79,39 @@ class UniversalVideoReader(IVideoReader):
 
     def _try_vlc_remux(self) -> bool:
         """Tenta usar o VLC para reempacotar stream cru de CFTV para contêiner MP4 e abrir."""
+        temp_mp4: Path | None = None
         try:
             from src.infrastructure.video.vlc_service import VLCService
 
             if not VLCService.is_available():
                 return False
 
-            import tempfile
-
-            temp_mp4 = Path(tempfile.gettempdir()) / f"vlc_clean_{Path(self.video_path).stem}.mp4"
+            temp_mp4 = (
+                Path(tempfile.gettempdir()) / f"vlc_clean_{Path(self.video_path).stem}_{uuid.uuid4().hex[:8]}.mp4"
+            )
             remuxed = VLCService.remux_to_clean_mp4(self.video_path, temp_mp4)
             if remuxed and remuxed.exists():
                 cap = cv2.VideoCapture(str(remuxed), cv2.CAP_FFMPEG)
                 if cap.isOpened():
-                    self._cap = cap
-                    self.backend = "vlc-remux"
-                    self._total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                    self._fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-                    self._width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    self._height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    self._codec_name = "vlc-mp4"
-                    logger.info(f"🎬 Vídeo .{Path(self.video_path).suffix} recuperado com sucesso via motor VLC!")
-                    return True
+                    ret, frame = cap.read()
+                    if ret and frame is not None and frame.size > 0:
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        self._cap = cap
+                        self._temp_remux_path = remuxed
+                        self.backend = "vlc-remux"
+                        self._total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                        self._fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+                        self._width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        self._height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        self._codec_name = "vlc-mp4"
+                        logger.info(f"🎬 Vídeo .{Path(self.video_path).suffix} recuperado com sucesso via motor VLC!")
+                        return True
+                cap.release()
+                remuxed.unlink(missing_ok=True)
         except Exception as e:
             logger.debug(f"VLC remux falhou: {e}")
+            if temp_mp4 is not None:
+                temp_mp4.unlink(missing_ok=True)
         return False
 
     def _try_opencv(self) -> bool:
@@ -157,7 +169,7 @@ class UniversalVideoReader(IVideoReader):
         return self.backend is not None
 
     def read(self) -> tuple[bool, np.ndarray | None]:
-        if self.backend == "opencv" and self._cap is not None:
+        if self.backend in {"opencv", "vlc-remux"} and self._cap is not None:
             return self._cap.read()
         elif self.backend == "pyav" and self._frame_generator is not None:
             try:
@@ -181,6 +193,18 @@ class UniversalVideoReader(IVideoReader):
             except Exception:
                 pass
             self._container = None
+        if self._temp_remux_path is not None:
+            try:
+                self._temp_remux_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            self._temp_remux_path = None
+
+    def __del__(self) -> None:
+        try:
+            self.release()
+        except Exception:
+            pass
 
     @property
     def fps(self) -> float:

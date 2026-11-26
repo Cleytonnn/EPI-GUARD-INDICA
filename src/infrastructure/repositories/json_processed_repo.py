@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import tempfile
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +24,7 @@ class JsonProcessedVideosRepository(IProcessedVideosRepository):
     def __init__(self, db_path: str | Path = "videos_processados.json"):
         self.db_path = Path(db_path)
         self.data: dict[str, Any] = {}
+        self._lock = threading.Lock()
         self._load()
 
     def _load(self) -> None:
@@ -35,11 +39,25 @@ class JsonProcessedVideosRepository(IProcessedVideosRepository):
             self.data = {}
 
     def _save(self) -> None:
+        tmp_path: Path | None = None
         try:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.db_path, "w", encoding="utf-8") as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                dir=self.db_path.parent,
+                prefix=f".{self.db_path.stem}_",
+                suffix=".tmp",
+                encoding="utf-8",
+                delete=False,
+            ) as f:
+                tmp_path = Path(f.name)
                 json.dump(self.data, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, self.db_path)
         except Exception as e:
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
             logger.error(f"❌ Erro ao salvar banco de vídeos processados: {e}")
 
     def is_processed(self, video_path: Path | str) -> bool:
@@ -72,14 +90,15 @@ class JsonProcessedVideosRepository(IProcessedVideosRepository):
             mtime = time.time()
             size = 0
 
-        self.data[key] = {
-            "placa": metadata.plate,
-            "data": metadata.record_date,
-            "video_name": metadata.video_name,
-            "processed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "mtime": mtime,
-            "size_bytes": size,
-            "duration_seconds": round(duration_seconds, 2),
-            "violations_count": violations_count,
-        }
-        self._save()
+        with self._lock:
+            self.data[key] = {
+                "placa": metadata.plate,
+                "data": metadata.record_date,
+                "video_name": metadata.video_name,
+                "processed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "mtime": mtime,
+                "size_bytes": size,
+                "duration_seconds": round(duration_seconds, 2),
+                "violations_count": violations_count,
+            }
+            self._save()

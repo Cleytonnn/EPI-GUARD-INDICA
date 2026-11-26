@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -26,9 +28,27 @@ class FrameAnalysisResult:
 class AnalyzeFrameUseCase:
     """Processa um frame de imagem sob demanda."""
 
-    def __init__(self, detector: IDetector, compliance_service: ComplianceService):
+    def __init__(
+        self,
+        detector: IDetector,
+        compliance_service: ComplianceService,
+        compliance_factory: Callable[[], ComplianceService] | None = None,
+    ):
         self.detector = detector
         self.compliance_service = compliance_service
+        self.compliance_factory = compliance_factory
+        self._compliance_by_camera: dict[str, ComplianceService] = {}
+        self._lock = threading.Lock()
+
+    def _get_compliance_service(self, camera_id: str | None) -> ComplianceService:
+        if self.compliance_factory is None:
+            return self.compliance_service
+        key = camera_id or "default"
+        service = self._compliance_by_camera.get(key)
+        if service is None:
+            service = self.compliance_factory()
+            self._compliance_by_camera[key] = service
+        return service
 
     def execute(
         self,
@@ -48,7 +68,9 @@ class AnalyzeFrameUseCase:
                     record_date="",
                     video_name="",
                 )
-            violations = self.compliance_service.check(detections, metadata=meta)
+            with self._lock:
+                checker = self._get_compliance_service(camera_id)
+                violations = checker.check(detections, metadata=meta)
 
         summary: dict[str, int] = {}
         for d in detections:

@@ -12,7 +12,6 @@ import logging
 
 from src.config.settings import AppSettings
 from src.container import Container
-from src.core.services.compliance_service import ComplianceService
 from src.infrastructure.cctv.camera_api_client import (
     CameraAPIClient,
     load_cameras_config,
@@ -49,11 +48,7 @@ def main() -> None:
     client = CameraAPIClient(
         cameras=cameras,
         detector=container.detector,
-        compliance_factory=lambda: ComplianceService(
-            required_ppe=settings.compliance.required_ppe,
-            violation_classes=settings.compliance.violation_classes,
-            min_violation_frames=settings.compliance.min_violation_frames,
-        ),
+        compliance_factory=container.create_compliance_service,
         alert_storage=container.alert_storage,
         notifier=container.notifier,
     )

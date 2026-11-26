@@ -4,13 +4,26 @@ from __future__ import annotations
 
 import csv
 import logging
+import threading
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from src.core.domain.violation import Violation
 from src.core.interfaces.report_repo import IViolationReportRepository
 
 logger = logging.getLogger(__name__)
+
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _sanitize_csv_cell(value: Any) -> str:
+    """Neutraliza prefixos de fórmula (CSV/Formula Injection) em células exportadas."""
+    text = "" if value is None else str(value)
+    stripped = text.lstrip()
+    if stripped and stripped[0] in _CSV_FORMULA_PREFIXES:
+        return f"'{text}"
+    return text
 
 
 class CsvViolationReportRepository(IViolationReportRepository):
@@ -18,6 +31,7 @@ class CsvViolationReportRepository(IViolationReportRepository):
 
     def __init__(self, csv_path: str | Path = "relatorio_infracoes.csv"):
         self.csv_path = Path(csv_path)
+        self._lock = threading.Lock()
         self._ensure_header()
 
     def _ensure_header(self) -> None:
@@ -56,23 +70,25 @@ class CsvViolationReportRepository(IViolationReportRepository):
             video_time_str = meta.video_time_str if meta else "00:00:00"
             video_second = f"{meta.video_second:.1f}" if meta else "0.0"
 
-            with open(self.csv_path, "a", newline="", encoding="utf-8-sig") as f:
-                writer = csv.writer(f, delimiter=";")
-                writer.writerow(
-                    [
-                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        plate,
-                        rec_date,
-                        video_name,
-                        video_time_str,
-                        video_second,
-                        violation.violation_type,
-                        violation.description,
-                        f"{violation.confidence:.1%}",
-                        violation.track_id if violation.track_id is not None else "N/A",
-                        violation.consecutive_frames,
-                        image_path or "",
-                    ]
-                )
+            row = [
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                plate,
+                rec_date,
+                video_name,
+                video_time_str,
+                video_second,
+                violation.violation_type,
+                violation.description,
+                f"{violation.confidence:.1%}",
+                violation.track_id if violation.track_id is not None else "N/A",
+                violation.consecutive_frames,
+                image_path or "",
+            ]
+
+            with self._lock:
+                self._ensure_header()
+                with open(self.csv_path, "a", newline="", encoding="utf-8-sig") as f:
+                    writer = csv.writer(f, delimiter=";")
+                    writer.writerow([_sanitize_csv_cell(cell) for cell in row])
         except Exception as e:
             logger.error(f"❌ Erro ao salvar linha no CSV de infrações: {e}")

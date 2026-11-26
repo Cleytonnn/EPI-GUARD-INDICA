@@ -10,6 +10,9 @@
 #   digest  - HTTP Digest Auth (Hikvision usa este)
 #   bearer  - Token Bearer (Authorization: Bearer <token>)
 #   api_key - API Key em header customizado
+#
+# Use placeholders ${VARIAVEL} (definidos no .env ou variáveis de ambiente)
+# para nunca versionar credenciais em texto puro.
 
 cameras:
 
@@ -18,13 +21,13 @@ cameras:
   # =============================================
   - camera_id: "cam_entrada_01"
     name: "Entrada Principal"
-    url: "http://192.168.1.100/api/snapshot"
+    url: "${CAM_ENTRADA_URL:-http://192.168.1.100/api/snapshot}"
     method: GET
     auth_type: "bearer"
-    token: "seu_token_aqui"
+    token: "${CAM_ENTRADA_TOKEN}"
     interval: 2.0          # Buscar a cada 2 segundos
     timeout: 10
-    enabled: true
+    enabled: false         # Exemplo desabilitado (defina variáveis no .env e mude para true)
 
   # =============================================
   # EXEMPLO 2: API que retorna JSON com Base64
@@ -33,25 +36,25 @@ cameras:
   # {"camera": "cam01", "image": "data:image/jpeg;base64,/9j/4AAQ..."}
   - camera_id: "cam_galpao_01"
     name: "Galpão Industrial"
-    url: "https://api.empresa.com/cameras/cam01/snapshot"
+    url: "${CAM_GALPAO_URL:-https://api.empresa.com/cameras/cam01/snapshot}"
     method: GET
     auth_type: "api_key"
-    token: "chave-api-da-empresa"
+    token: "${CAM_GALPAO_API_KEY}"
     api_key_header: "X-API-Key"     # Nome do header
     image_field: "image"            # Campo JSON que contém a imagem
     interval: 3.0
-    enabled: true
+    enabled: false
 
   # =============================================
   # EXEMPLO 3: Hikvision ISAPI
   # =============================================
   - camera_id: "cam_hikvision_01"
     name: "Câmera Hikvision 01"
-    url: "http://192.168.1.64/ISAPI/Streaming/channels/101/picture"
+    url: "${CAM_HIKVISION_URL:-http://192.168.1.64/ISAPI/Streaming/channels/101/picture}"
     method: GET
     auth_type: "digest"            # Hikvision usa Digest Auth
-    username: "admin"
-    password: "senha_da_camera"
+    username: "${CAM_HIKVISION_USER}"
+    password: "${CAM_HIKVISION_PASSWORD}"
     interval: 2.0
     enabled: false                 # Desabilitada (mude para true)
 
@@ -60,11 +63,11 @@ cameras:
   # =============================================
   - camera_id: "cam_intelbras_01"
     name: "Câmera Intelbras 01"
-    url: "http://192.168.1.108/cgi-bin/snapshot.cgi?channel=1"
+    url: "${CAM_INTELBRAS_URL:-http://192.168.1.108/cgi-bin/snapshot.cgi?channel=1}"
     method: GET
     auth_type: "digest"
-    username: "admin"
-    password: "senha_da_camera"
+    username: "${CAM_INTELBRAS_USER}"
+    password: "${CAM_INTELBRAS_PASSWORD}"
     interval: 2.0
     enabled: false
 
@@ -73,10 +76,10 @@ cameras:
   # =============================================
   - camera_id: "cam_post_01"
     name: "Sistema VMS"
-    url: "https://vms.empresa.com/api/v1/cameras/snapshot"
+    url: "${CAM_VMS_URL:-https://vms.empresa.com/api/v1/cameras/snapshot}"
     method: POST
     auth_type: "bearer"
-    token: "jwt_token_aqui"
+    token: "${CAM_VMS_TOKEN}"
     body:
       camera_id: "CAM-001"
       resolution: "1080p"
@@ -92,11 +95,11 @@ cameras:
   # =============================================
   - camera_id: "cam_onvif_01"
     name: "Câmera ONVIF"
-    url: "http://192.168.1.200/onvif-http/snapshot?Profile_1"
+    url: "${CAM_ONVIF_URL:-http://192.168.1.200/onvif-http/snapshot?Profile_1}"
     method: GET
     auth_type: "basic"
-    username: "admin"
-    password: "senha"
+    username: "${CAM_ONVIF_USER}"
+    password: "${CAM_ONVIF_PASSWORD}"
     interval: 2.0
     enabled: false
 
@@ -105,10 +108,10 @@ cameras:
   # =============================================
   - camera_id: "cam_dahua_01"
     name: "Câmera Dahua 01"
-    url: "http://192.168.1.110/cgi-bin/snapshot.cgi?channel=0"
+    url: "${CAM_DAHUA_URL:-http://192.168.1.110/cgi-bin/snapshot.cgi?channel=0}"
     method: GET
     auth_type: "digest"
-    username: "admin"
-    password: "senha_da_camera"
+    username: "${CAM_DAHUA_USER}"
+    password: "${CAM_DAHUA_PASSWORD}"
     interval: 2.0
     enabled: false
