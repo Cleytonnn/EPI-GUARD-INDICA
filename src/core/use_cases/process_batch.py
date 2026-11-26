@@ -59,11 +59,25 @@ class ProcessBatchUseCase:
         results: list[VideoProcessingResult] = []
         for idx, video_path in enumerate(pending_videos, 1):
             logger.info(f"\n[{idx}/{len(pending_videos)}] Iniciando análise...")
-            res = self.process_video_uc.execute(
-                video_path=video_path,
-                root_dir=input_dir,
-                skip_frames=skip_frames,
-            )
+            try:
+                res = self.process_video_uc.execute(
+                    video_path=video_path,
+                    root_dir=input_dir,
+                    skip_frames=skip_frames,
+                )
+            except Exception as exc:  # um vídeo com defeito não pode interromper o lote inteiro
+                logger.error(f"❌ Falha ao processar {video_path.name}: {exc}", exc_info=True)
+                res = VideoProcessingResult(
+                    success=False,
+                    video_path=str(video_path),
+                    plate="",
+                    record_date="",
+                    duration_seconds=0.0,
+                    elapsed_seconds=0.0,
+                    violations_count=0,
+                    violations=[],
+                    error=str(exc),
+                )
             results.append(res)
 
         self._log_summary(results)
@@ -71,13 +85,14 @@ class ProcessBatchUseCase:
 
     def _log_summary(self, results: list[VideoProcessingResult]) -> None:
         total = len(results)
+        failed = sum(1 for r in results if not r.success)
         violations = sum(r.violations_count for r in results)
         total_time = sum(r.elapsed_seconds for r in results)
 
         logger.info("\n" + "=" * 60)
         logger.info("📊 RESUMO GERAL DO PROCESSAMENTO DE VÍDEOS")
         logger.info("=" * 60)
-        logger.info(f"   Total de vídeos analisados: {total}")
+        logger.info(f"   Total de vídeos analisados: {total} (com falha: {failed})")
         logger.info(f"   Total de infrações de EPI encontradas: {violations}")
         logger.info(f"   Tempo total de processamento: {total_time:.1f}s")
         logger.info("=" * 60)

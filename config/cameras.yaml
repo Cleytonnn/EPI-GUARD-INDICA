@@ -10,6 +10,10 @@
 #   digest  - HTTP Digest Auth (Hikvision usa este)
 #   bearer  - Token Bearer (Authorization: Bearer <token>)
 #   api_key - API Key em header customizado
+#
+# SEGURANÇA: não deixe senhas/tokens reais neste arquivo. Use ${NOME_DA_VARIAVEL}
+# e defina o valor no .env (ex.: CAM_HIKVISION_SENHA=...). O sistema substitui ao carregar.
+# Todas as câmeras de exemplo vêm DESABILITADAS (enabled: false); habilite só as reais.
 
 cameras:
 
@@ -21,10 +25,10 @@ cameras:
     url: "http://192.168.1.100/api/snapshot"
     method: GET
     auth_type: "bearer"
-    token: "seu_token_aqui"
+    token: "${CAM_ENTRADA_TOKEN}"
     interval: 2.0          # Buscar a cada 2 segundos
     timeout: 10
-    enabled: true
+    enabled: false
 
   # =============================================
   # EXEMPLO 2: API que retorna JSON com Base64
@@ -36,11 +40,11 @@ cameras:
     url: "https://api.empresa.com/cameras/cam01/snapshot"
     method: GET
     auth_type: "api_key"
-    token: "chave-api-da-empresa"
+    token: "${CAM_GALPAO_API_KEY}"
     api_key_header: "X-API-Key"     # Nome do header
     image_field: "image"            # Campo JSON que contém a imagem
     interval: 3.0
-    enabled: true
+    enabled: false
 
   # =============================================
   # EXEMPLO 3: Hikvision ISAPI
@@ -51,7 +55,7 @@ cameras:
     method: GET
     auth_type: "digest"            # Hikvision usa Digest Auth
     username: "admin"
-    password: "senha_da_camera"
+    password: "${CAM_SENHA}"
     interval: 2.0
     enabled: false                 # Desabilitada (mude para true)
 
@@ -64,7 +68,7 @@ cameras:
     method: GET
     auth_type: "digest"
     username: "admin"
-    password: "senha_da_camera"
+    password: "${CAM_SENHA}"
     interval: 2.0
     enabled: false
 
@@ -76,7 +80,7 @@ cameras:
     url: "https://vms.empresa.com/api/v1/cameras/snapshot"
     method: POST
     auth_type: "bearer"
-    token: "jwt_token_aqui"
+    token: "${VMS_TOKEN}"
     body:
       camera_id: "CAM-001"
       resolution: "1080p"
@@ -96,7 +100,7 @@ cameras:
     method: GET
     auth_type: "basic"
     username: "admin"
-    password: "senha"
+    password: "${CAM_SENHA}"
     interval: 2.0
     enabled: false
 
@@ -109,6 +113,6 @@ cameras:
     method: GET
     auth_type: "digest"
     username: "admin"
-    password: "senha_da_camera"
+    password: "${CAM_SENHA}"
     interval: 2.0
     enabled: false

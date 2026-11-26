@@ -23,9 +23,8 @@ def test_vlc_service_detection():
 
 def test_vlc_embedded_player_initialization():
     """Testa se o widget EmbeddedVLCPlayer inicializa corretamente."""
-    import tkinter
-
-    import customtkinter as ctk
+    tkinter = pytest.importorskip("tkinter", reason="Tkinter indisponível neste Python")
+    ctk = pytest.importorskip("customtkinter")
 
     from src.presentation.desktop.widgets.vlc_player_canvas import EmbeddedVLCPlayer
 

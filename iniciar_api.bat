@@ -26,7 +26,9 @@ echo Pressione CTRL+C para encerrar o servidor.
 echo =======================================================================
 echo.
 
-python -m uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+:: Sem --reload (modo desenvolvimento: reinicia e recarrega os modelos a cada alteração de arquivo)
+:: e escutando só nesta máquina. Para liberar na rede, troque 127.0.0.1 por 0.0.0.0 e defina API_KEY no .env.
+python -m src.api --host 127.0.0.1 --port 8000
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

@@ -84,3 +84,13 @@ active_learning:
   dedup_threshold: 6                  # Distância de hash para considerar frames repetidos
 
 
+
+# --- API REST ---
+api:
+  host: "127.0.0.1"          # Use "0.0.0.0" somente se a API precisar ser acessada por outras máquinas
+  port: 8000
+  cors_origins:              # Origens web autorizadas (evite "*" em produção)
+    - "http://localhost"
+    - "http://127.0.0.1"
+  max_upload_mb: 10          # Tamanho máximo de imagem aceita pela API
+  # A chave de acesso fica no .env (API_KEY=...). Se definida, a API exige o header X-API-Key.

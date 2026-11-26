@@ -27,6 +27,7 @@ class UniversalVideoReader(IVideoReader):
         self._container = None
         self._stream = None
         self._frame_generator = None
+        self._temp_file: Path | None = None  # MP4 temporário gerado pelo remux do VLC
 
         self._fps: float = 25.0
         self._total_frames: int = 0
@@ -83,10 +84,14 @@ class UniversalVideoReader(IVideoReader):
                 return False
 
             import tempfile
+            from uuid import uuid4
 
-            temp_mp4 = Path(tempfile.gettempdir()) / f"vlc_clean_{Path(self.video_path).stem}.mp4"
+            # Nome único: antes era só o "stem", então CH1.265 de placas/pastas diferentes
+            # sobrescreviam o mesmo temporário (e podia ser lido o vídeo de OUTRO veículo)
+            temp_mp4 = Path(tempfile.gettempdir()) / f"vlc_clean_{Path(self.video_path).stem}_{uuid4().hex[:8]}.mp4"
             remuxed = VLCService.remux_to_clean_mp4(self.video_path, temp_mp4)
             if remuxed and remuxed.exists():
+                self._temp_file = remuxed
                 cap = cv2.VideoCapture(str(remuxed), cv2.CAP_FFMPEG)
                 if cap.isOpened():
                     self._cap = cap
@@ -96,8 +101,10 @@ class UniversalVideoReader(IVideoReader):
                     self._width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                     self._height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                     self._codec_name = "vlc-mp4"
-                    logger.info(f"🎬 Vídeo .{Path(self.video_path).suffix} recuperado com sucesso via motor VLC!")
+                    logger.info(f"🎬 Vídeo {Path(self.video_path).suffix} recuperado com sucesso via motor VLC!")
                     return True
+                cap.release()
+                self._cleanup_temp()
         except Exception as e:
             logger.debug(f"VLC remux falhou: {e}")
         return False
@@ -145,7 +152,7 @@ class UniversalVideoReader(IVideoReader):
                 self._height = stream.height or 0
                 self._frame_generator = container.decode(video=0)
                 logger.info(
-                    f"🎞️ Vídeo .{Path(self.video_path).suffix} aberto via PyAV: "
+                    f"🎞️ Vídeo {Path(self.video_path).suffix} aberto via PyAV: "
                     f"{Path(self.video_path).name} (codec: {self._codec_name.upper()}, {self._width}x{self._height})"
                 )
                 return True
@@ -157,7 +164,9 @@ class UniversalVideoReader(IVideoReader):
         return self.backend is not None
 
     def read(self) -> tuple[bool, np.ndarray | None]:
-        if self.backend == "opencv" and self._cap is not None:
+        # "vlc-remux" também usa VideoCapture: antes ficava de fora e o vídeo era lido com 0 frames
+        # (e ainda marcado como "processado" sem nenhuma análise)
+        if self.backend in ("opencv", "vlc-remux") and self._cap is not None:
             return self._cap.read()
         elif self.backend == "pyav" and self._frame_generator is not None:
             try:
@@ -181,6 +190,22 @@ class UniversalVideoReader(IVideoReader):
             except Exception:
                 pass
             self._container = None
+        self._cleanup_temp()
+
+    def _cleanup_temp(self) -> None:
+        """Apaga o MP4 temporário do remux (antes ficava acumulado na pasta TEMP)."""
+        if self._temp_file is not None:
+            try:
+                self._temp_file.unlink(missing_ok=True)
+            except OSError as exc:
+                logger.debug(f"Não foi possível remover temporário {self._temp_file}: {exc}")
+            self._temp_file = None
+
+    def __enter__(self) -> UniversalVideoReader:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.release()
 
     @property
     def fps(self) -> float:

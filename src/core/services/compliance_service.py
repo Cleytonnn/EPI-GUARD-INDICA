@@ -12,6 +12,15 @@ from src.core.domain.violation import Violation
 
 logger = logging.getLogger(__name__)
 
+# Ordem de avaliação e geometria das caixas inferidas: (fator de confiança, topo, base) relativos à pessoa
+_INFERENCE_ORDER = ("helmet", "gloves", "vest", "uniform_rf")
+_INFERRED_ZONES: dict[str, tuple[float, float, float]] = {
+    "helmet": (0.85, 0.0, 0.45),
+    "gloves": (0.80, 0.40, 0.90),
+    "vest": (0.85, 0.15, 0.70),
+    "uniform_rf": (0.85, 0.15, 0.85),
+}
+
 
 class ComplianceService:
     """Validador de conformidade temporal de EPIs.
@@ -78,7 +87,9 @@ class ComplianceService:
     ) -> list[Violation]:
         """Avalia as detecções do frame atual e retorna violações confirmadas."""
         if not detections:
-            # Reduz contadores de ausências que sumiram
+            # Quadro vazio: todas as infrações em contagem "sumiram". Antes o conjunto do quadro
+            # anterior não era limpo, então nada era zerado e a contagem continuava depois.
+            self._current_frame_keys.clear()
             self._decay_counters()
             return []
 
@@ -89,106 +100,37 @@ class ComplianceService:
         if self.infer_missing_ppe:
             # Audita apenas trabalhadores ('Person'), ignorando civis/pedestres ('civil')
             persons = [d for d in detections if d.class_name == "Person"]
-
-            # 1. Capacete (Helmet)
-            if "helmet" in self.required_ppe:
-                helmets = [d for d in detections if d.class_name == "helmet"]
-                direct_no_helmets = [d for d in detections if d.class_name == "no_helmet"]
+            for ppe in _INFERENCE_ORDER:
+                if ppe not in self.required_ppe:
+                    continue
+                present = [d for d in detections if d.class_name == ppe]
+                direct_no = [d for d in detections if d.class_name == f"no_{ppe}"]
+                factor, top, bottom = _INFERRED_ZONES[ppe]
                 for person in persons:
-                    has_helmet = any(self._is_ppe_on_person(person.bbox, h.bbox, "helmet") for h in helmets)
-                    has_direct_no = any(
-                        self._is_ppe_on_person(person.bbox, nh.bbox, "no_helmet") for nh in direct_no_helmets
-                    )
-
-                    if not has_helmet and not has_direct_no:
-                        px1, py1, px2, py2 = person.bbox
-                        head_y2 = py1 + max(int((py2 - py1) * 0.45), 20)
-                        active_detections.append(
-                            Detection(
-                                class_name="no_helmet",
-                                confidence=round(person.confidence * 0.85, 3),
-                                bbox=(px1, py1, px2, head_y2),
-                                track_id=person.track_id,
-                            )
+                    if any(self._is_ppe_on_person(person.bbox, d.bbox, ppe) for d in present):
+                        continue
+                    if any(self._is_ppe_on_person(person.bbox, d.bbox, f"no_{ppe}") for d in direct_no):
+                        continue
+                    px1, py1, px2, py2 = person.bbox
+                    h = py2 - py1
+                    y1 = py1 + int(h * top)
+                    y2 = py1 + max(int(h * bottom), 20) if ppe == "helmet" else min(py2, py1 + int(h * bottom))
+                    active_detections.append(
+                        Detection(
+                            class_name=f"no_{ppe}",
+                            confidence=round(person.confidence * factor, 3),
+                            bbox=(px1, y1, px2, y2),
+                            track_id=person.track_id,
                         )
-
-            # 2. Luvas (Gloves)
-            if "gloves" in self.required_ppe:
-                gloves = [d for d in detections if d.class_name == "gloves"]
-                direct_no_gloves = [d for d in detections if d.class_name == "no_gloves"]
-                for person in persons:
-                    has_gloves = any(self._is_ppe_on_person(person.bbox, g.bbox, "gloves") for g in gloves)
-                    has_direct_no = any(
-                        self._is_ppe_on_person(person.bbox, ng.bbox, "no_gloves") for ng in direct_no_gloves
                     )
-
-                    if not has_gloves and not has_direct_no:
-                        px1, py1, px2, py2 = person.bbox
-                        h = py2 - py1
-                        hands_y1 = py1 + int(h * 0.40)
-                        hands_y2 = min(py2, py1 + int(h * 0.90))
-                        active_detections.append(
-                            Detection(
-                                class_name="no_gloves",
-                                confidence=round(person.confidence * 0.80, 3),
-                                bbox=(px1, hands_y1, px2, hands_y2),
-                                track_id=person.track_id,
-                            )
-                        )
-
-            # 3. Colete (Vest)
-            if "vest" in self.required_ppe:
-                vests = [d for d in detections if d.class_name == "vest"]
-                direct_no_vests = [d for d in detections if d.class_name == "no_vest"]
-                for person in persons:
-                    has_vest = any(self._is_ppe_on_person(person.bbox, v.bbox, "vest") for v in vests)
-                    has_direct_no = any(
-                        self._is_ppe_on_person(person.bbox, nv.bbox, "no_vest") for nv in direct_no_vests
-                    )
-
-                    if not has_vest and not has_direct_no:
-                        px1, py1, px2, py2 = person.bbox
-                        h = py2 - py1
-                        torso_y1 = py1 + int(h * 0.15)
-                        torso_y2 = py1 + int(h * 0.70)
-                        active_detections.append(
-                            Detection(
-                                class_name="no_vest",
-                                confidence=round(person.confidence * 0.85, 3),
-                                bbox=(px1, torso_y1, px2, torso_y2),
-                                track_id=person.track_id,
-                            )
-                        )
-
-            # 4. Uniforme RF (Uniforme Risco Fogo NR-10)
-            if "uniform_rf" in self.required_ppe:
-                uniforms = [d for d in detections if d.class_name == "uniform_rf"]
-                direct_no_uniforms = [d for d in detections if d.class_name == "no_uniform_rf"]
-                for person in persons:
-                    has_uniform = any(self._is_ppe_on_person(person.bbox, u.bbox, "uniform_rf") for u in uniforms)
-                    has_direct_no = any(
-                        self._is_ppe_on_person(person.bbox, nu.bbox, "no_uniform_rf") for nu in direct_no_uniforms
-                    )
-
-                    if not has_uniform and not has_direct_no:
-                        px1, py1, px2, py2 = person.bbox
-                        h = py2 - py1
-                        torso_y1 = py1 + int(h * 0.15)
-                        torso_y2 = min(py2, py1 + int(h * 0.85))
-                        active_detections.append(
-                            Detection(
-                                class_name="no_uniform_rf",
-                                confidence=round(person.confidence * 0.85, 3),
-                                bbox=(px1, torso_y1, px2, torso_y2),
-                                track_id=person.track_id,
-                            )
-                        )
 
         confirmed: list[Violation] = []
         self._current_frame_keys.clear()
 
-        # Identifica civis para descartar qualquer alerta em transeuntes na rua
-        civil_tracks = {d.track_id for d in active_detections if d.class_name == "civil"}
+        # Identifica civis para descartar qualquer alerta em transeuntes na rua.
+        # Só IDs reais: sem tracking todos têm track_id=None e um único civil no quadro
+        # silenciava as infrações de TODOS os trabalhadores.
+        civil_tracks = {d.track_id for d in active_detections if d.class_name == "civil" and d.track_id is not None}
 
         for det in active_detections:
             if det.class_name not in self.violation_classes:
@@ -196,10 +138,14 @@ class ComplianceService:
 
             # Se for civil na rua, descarta violação
             if self.only_company_workers and not is_cabin:
-                if det.track_id in civil_tracks:
+                if det.track_id is not None and det.track_id in civil_tracks:
                     continue
 
             key = (det.track_id, det.class_name)
+            # Conta no máximo 1 vez por quadro: sem tracking, N pessoas com a mesma infração
+            # compartilham a chave e o contador subia N vezes por quadro (confirmação precoce)
+            if key in self._current_frame_keys:
+                continue
             self._current_frame_keys.add(key)
             self._violation_counter[key] += 1
             self._confidence_sum[key] += det.confidence

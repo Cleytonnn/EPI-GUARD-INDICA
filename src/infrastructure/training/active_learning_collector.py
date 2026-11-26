@@ -73,6 +73,7 @@ STATUS_REJECTED = "rejeitados"
 ALL_STATUSES = (STATUS_PENDING, STATUS_APPROVED, STATUS_REJECTED)
 
 REVIEW_ACTIONS = ("correto", "falso_alarme", "civil", "descartar")
+_SAMPLE_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 @dataclass
@@ -286,6 +287,8 @@ class ActiveLearningCollector(ITrainingSampleCollector):
         """
         if action not in REVIEW_ACTIONS:
             raise ValueError(f"Ação de revisão inválida: {action}")
+        if not _SAMPLE_ID_RE.match(sample_id or ""):  # impede caminhos como "../../arquivo"
+            raise ValueError(f"Identificador de amostra inválido: {sample_id!r}")
 
         with self._lock:
             src = self.output_dir / STATUS_PENDING
@@ -343,6 +346,15 @@ class ActiveLearningCollector(ITrainingSampleCollector):
         approved = self.list_samples(STATUS_APPROVED)
         if not approved:
             return {"train": 0, "val": 0, "data_yaml": None}
+
+        # A pasta de destino é APAGADA antes da exportação: recusa destinos perigosos
+        # (raiz do disco, pasta do projeto, ou a própria pasta de coleta com as amostras)
+        dest_res = dest.resolve()
+        out_res = self.output_dir.resolve()
+        if dest_res == Path(dest_res.anchor) or dest_res == out_res or dest_res in out_res.parents:
+            raise ValueError(f"Destino de exportação inseguro (seria apagado): {dest_res}")
+        if dest.exists() and any(dest.iterdir()) and not (dest / "data.yaml").exists():
+            raise ValueError(f"Destino '{dest_res}' não está vazio e não parece um dataset exportado anteriormente.")
 
         if dest.exists():
             shutil.rmtree(dest)

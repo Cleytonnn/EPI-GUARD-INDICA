@@ -45,15 +45,24 @@ class WatchDirectoryUseCase:
                 if pending:
                     logger.info(f"🔔 {len(pending)} novo(s) vídeo(s) detectado(s) para análise!")
                     for v in pending:
-                        self.batch_uc.process_video_uc.execute(
-                            video_path=v,
-                            root_dir=dir_obj,
-                            skip_frames=skip_frames,
-                        )
+                        if not self._running:
+                            break
+                        try:
+                            self.batch_uc.process_video_uc.execute(
+                                video_path=v,
+                                root_dir=dir_obj,
+                                skip_frames=skip_frames,
+                            )
+                        except Exception as exc:  # o watcher não pode morrer por causa de um arquivo
+                            logger.error(f"❌ Falha ao processar {v.name}: {exc}", exc_info=True)
                 else:
                     logger.debug(f"💤 Nenhum vídeo novo. Aguardando {interval_seconds}s...")
 
-                time.sleep(interval_seconds)
+                # Espera em passos curtos para que stop() responda rápido (botão "Parar" do Desktop)
+                waited = 0.0
+                while self._running and waited < interval_seconds:
+                    time.sleep(0.5)
+                    waited += 0.5
 
         except KeyboardInterrupt:
             logger.info("🛑 Monitoramento contínuo encerrado pelo usuário.")

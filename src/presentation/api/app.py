@@ -33,14 +33,21 @@ def create_app(container: Container | None = None) -> FastAPI:
     )
 
     # Configuração de CORS
-    cors_origins = app_container.settings.api.cors_origins
+    # "*" + allow_credentials=True é inválido pela especificação CORS (navegadores rejeitam)
+    # e expõe a API a qualquer site. Credenciais só são liberadas com origens explícitas.
+    cors_origins = list(app_container.settings.api.cors_origins or [])
+    wildcard = "*" in cors_origins
+    if wildcard:
+        logger.warning("⚠️ CORS liberado para qualquer origem ('*'). Defina api.cors_origins em produção.")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=not wildcard,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "X-API-Key"],
     )
+    if not getattr(app_container.settings.api, "api_key", None):
+        logger.warning("⚠️ API sem autenticação (defina API_KEY no .env para exigir o header X-API-Key).")
 
     # Registro de rotas (adiciona as rotas diretamente para compatibilidade de inspeção e OpenAPI limpo)
     for r in router.routes:

@@ -10,20 +10,26 @@ echo ===========================================================================
 echo.
 
 :: 1. Verificar instalacao do Python
-echo [1/6] Verificando instalacao do Python...
+echo [1/7] Verificando instalacao do Python...
 set "PYTHON_CMD="
+:: Obs.: dentro de blocos ( ... ) o %ERRORLEVEL% e expandido ANTES de executar o bloco,
+:: por isso a deteccao do launcher "py" nunca funcionava. Agora usa goto/rotulos.
 where python >nul 2>&1
-if %ERRORLEVEL% EQU 0 set "PYTHON_CMD=python"
+if errorlevel 1 goto TENTAR_PY
+set "PYTHON_CMD=python"
+goto CHECAR_PYTHON
 
-if "%PYTHON_CMD%"=="" (
-    where py >nul 2>&1
-    if %ERRORLEVEL% EQU 0 set "PYTHON_CMD=py -3"
-)
+:TENTAR_PY
+where py >nul 2>&1
+if errorlevel 1 goto ERRO_SEM_PYTHON
+set "PYTHON_CMD=py -3"
 
-if "%PYTHON_CMD%"=="" goto ERRO_SEM_PYTHON
-
+:CHECAR_PYTHON
 %PYTHON_CMD% --version
-if %ERRORLEVEL% NEQ 0 goto ERRO_VERSAO_PYTHON
+if errorlevel 1 goto ERRO_VERSAO_PYTHON
+:: Garante Python 3.10+ (o README exige, mas antes nao era verificado)
+%PYTHON_CMD% -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)"
+if errorlevel 1 goto ERRO_VERSAO_PYTHON
 echo [OK] Python detectado com sucesso.
 echo.
 goto CRIAR_VENV
@@ -45,17 +51,19 @@ pause
 exit /b 1
 
 :ERRO_VERSAO_PYTHON
-echo [ERRO] Falha ao verificar a versao do Python.
+echo [ERRO] Python 3.10 ou superior e necessario. Versao encontrada:
+%PYTHON_CMD% --version
 pause
 exit /b 1
 
 :: 2. Criar ambiente virtual isolado (.venv)
 :CRIAR_VENV
-echo [2/6] Configurando ambiente virtual .venv...
+echo [2/7] Configurando ambiente virtual .venv...
 if exist ".venv\Scripts\python.exe" goto VENV_JA_EXISTE
 
-echo Criando ambiente virtual com acesso a pacotes locais...
-%PYTHON_CMD% -m venv --system-site-packages .venv
+echo Criando ambiente virtual isolado...
+:: Sem --system-site-packages: pacotes globais antigos (numpy, torch, opencv) causavam conflitos
+%PYTHON_CMD% -m venv .venv
 if not exist ".venv\Scripts\python.exe" (
     echo [ERRO] Falha ao criar o ambiente virtual .venv.
     pause
@@ -70,7 +78,7 @@ echo [OK] Ambiente virtual .venv ja existe.
 :: 3. Ativar ambiente virtual
 :ATIVAR_VENV
 echo.
-echo [3/6] Ativando ambiente virtual...
+echo [3/7] Ativando ambiente virtual...
 call .venv\Scripts\activate.bat
 if %ERRORLEVEL% NEQ 0 (
     echo [ERRO] Falha ao ativar o ambiente virtual.
@@ -81,13 +89,13 @@ echo [OK] Ambiente virtual ativado.
 echo.
 
 :: 4. Atualizar pip, setuptools e wheel
-echo [4/6] Atualizando pip e ferramentas basicas...
+echo [4/7] Atualizando pip e ferramentas basicas...
 python -m pip install --upgrade pip setuptools wheel --quiet
 echo [OK] Ferramentas de pacote atualizadas.
 echo.
 
 :: 5. Instalar PyTorch com suporte a Aceleracao por GPU CUDA se houver placa NVIDIA
-echo [5/6] Verificando hardware e suporte a Inteligencia Artificial...
+echo [5/7] Verificando hardware e suporte a Inteligencia Artificial...
 where nvidia-smi >nul 2>&1
 if %ERRORLEVEL% EQU 0 goto VERIFICAR_NVIDIA
 goto VERIFICAR_CPU
@@ -123,7 +131,7 @@ goto INSTALAR_REQUISITOS
 echo.
 echo Instalando dependencias do projeto requirements.txt...
 python -m pip install -r requirements.txt
-if %ERRORLEVEL% NEQ 0 (
+if errorlevel 1 (
     echo [ERRO] Ocorreu uma falha ao instalar as dependencias.
     pause
     exit /b 1
@@ -136,10 +144,19 @@ echo [6/7] Verificando modelos neurais de Pose e EPI...
 if exist "yolov8n-pose.pt" goto MODELO_OK
 echo Baixando modelo base yolov8n-pose.pt...
 python -c "from ultralytics import YOLO; YOLO('yolov8n-pose.pt')"
-goto VERIFICAR_VLC
+goto VERIFICAR_LFS
 
 :MODELO_OK
 echo [OK] Modelo yolov8n-pose.pt ja presente no diretorio.
+
+:VERIFICAR_LFS
+:: models\epi_best.pt baixado sem Git LFS e so um ponteiro de texto (~130 bytes)
+python -c "import sys; from src.infrastructure.ai.model_utils import is_git_lfs_pointer as p; sys.exit(1 if p('models/epi_best.pt') else 0)"
+if errorlevel 1 (
+    echo [AVISO] models\epi_best.pt e apenas um ponteiro do Git LFS - o modelo de EPIs NAO foi baixado.
+    echo         O sistema funcionara so com Pose/heuristica. Para corrigir: git lfs install ^&^& git lfs pull
+)
+goto VERIFICAR_VLC
 
 :: 7. Verificar reprodutor VLC Media Player
 :VERIFICAR_VLC

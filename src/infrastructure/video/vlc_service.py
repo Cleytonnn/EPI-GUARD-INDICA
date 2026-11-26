@@ -99,14 +99,30 @@ class VLCService:
             out = Path(output_path).resolve()
 
         out.parent.mkdir(parents=True, exist_ok=True)
+        # Remove saída antiga: antes um arquivo de uma execução anterior "passava" na verificação
+        # de tamanho mesmo quando o remux atual falhava
+        try:
+            out.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning(f"Não foi possível remover saída anterior {out}: {exc}")
+            return None
+
         cmd = [str(vlc_exe), "-I", "dummy", str(inp), f"--sout=#std{{access=file,mux=mp4,dst='{out}'}}", "vlc://quit"]
 
         try:
-            subprocess.run(cmd, capture_output=True, timeout=120)
+            proc = subprocess.run(cmd, capture_output=True, timeout=600)  # 120s era pouco p/ gravações longas
+            if proc.returncode != 0:
+                logger.warning(f"VLC retornou código {proc.returncode} no remux de {inp.name}")
             if out.exists() and out.stat().st_size > 1000:
                 logger.info(f"✅ VLC remux concluído: {out}")
                 return out
+        except subprocess.TimeoutExpired:
+            logger.error(f"❌ Remux do VLC excedeu o tempo limite: {inp.name}")
         except Exception as e:
             logger.error(f"❌ Erro no remux do VLC: {e}")
+        try:
+            out.unlink(missing_ok=True)  # não deixa arquivo parcial
+        except OSError:
+            pass
 
         return None

@@ -26,8 +26,10 @@ def main():
     parser.add_argument("--reload", action="store_true", help="Recarregar em alterações (desenvolvimento)")
     args = parser.parse_args()
 
+    # Sem --reload, passa o objeto `app` já criado. Antes era sempre a string "src.api:app",
+    # o que fazia o uvicorn reimportar o módulo e carregar os modelos de IA DUAS vezes.
     uvicorn.run(
-        "src.api:app",
+        "src.api:app" if args.reload else app,
         host=args.host,
         port=args.port,
         reload=args.reload,

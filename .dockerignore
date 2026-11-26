@@ -1,0 +1,19 @@
+# Nunca copiar segredos, ambientes locais ou dados para dentro da imagem
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+.git/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+datasets/
+runs/
+gravacoes/
+alertas/
+videos_processados.json
+relatorio_infracoes.csv
+*.log
+MELHORIAS/
