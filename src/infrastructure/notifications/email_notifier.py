@@ -34,7 +34,9 @@ class EmailNotifier:
         self.smtp_server = smtp_server
         self.smtp_port = smtp_port
         self.enabled = enabled and bool(sender and password and receiver)
+        self.timeout = 30  # segundos; sem timeout uma conexão SMTP travada prendia a thread para sempre
         self._sent_count = 0
+        self._count_lock = threading.Lock()
 
         if not self.enabled:
             logger.debug("ℹ️ Notificador de e-mail desabilitado ou sem credenciais completas.")
@@ -105,12 +107,19 @@ class EmailNotifier:
                     )
                     msg.attach(mime_img)
 
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.sender, self.password)
-                server.sendmail(self.sender, self.receiver, msg.as_string())
+            receivers = [r.strip() for r in str(self.receiver).replace(";", ",").split(",") if r.strip()]
+            if int(self.smtp_port) == 465:  # SMTPS (SSL direto) — antes só funcionava STARTTLS na 587
+                with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=self.timeout) as server:
+                    server.login(self.sender, self.password)
+                    server.sendmail(self.sender, receivers, msg.as_string())
+            else:
+                with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=self.timeout) as server:
+                    server.starttls()
+                    server.login(self.sender, self.password)
+                    server.sendmail(self.sender, receivers, msg.as_string())
 
-            self._sent_count += 1
+            with self._count_lock:
+                self._sent_count += 1
             logger.info(f"📧 E-mail de alerta enviado com sucesso para {self.receiver}")
             return True
 

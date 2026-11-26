@@ -124,6 +124,9 @@ class HybridEPIDetector(IDetector):
         self.crop_padding = float(crop_padding)
         self.smoother = smoother or PPEStateSmoother()
         self._worker_grace: dict[int, int] = {}
+        self._grace_last_seen: dict[int, int] = {}
+        self._frame_counter = 0
+        self.ppe_model_path = str(ppe_model_path)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         if ppe_model is not None:
@@ -213,6 +216,8 @@ class HybridEPIDetector(IDetector):
     def detect(self, frame: np.ndarray, skip_frames: int = 1) -> list[Detection]:
         base = self.pose.detect(frame, skip_frames)
         self.smoother.begin_frame()
+        self._frame_counter += 1
+        self._prune_grace()
         if frame is None or frame.size == 0 or not base:
             return base
 
@@ -231,6 +236,8 @@ class HybridEPIDetector(IDetector):
         for idx, (group, model_dets) in enumerate(zip(groups, model_by_person, strict=True)):
             person = group.person
             tid = person.track_id if person.track_id not in (None, -1) else -(idx + 1)
+            if tid >= 0:
+                self._grace_last_seen[tid] = self._frame_counter
 
             # Suaviza o enquadramento da própria pessoa para evitar saltos quadro a quadro
             _, _, smooth_person_box = self.smoother.update((tid, "person"), 1.0, person.bbox)
@@ -362,11 +369,36 @@ class HybridEPIDetector(IDetector):
                         d.bbox,
                     )
 
+    def _prune_grace(self, max_age: int = 300) -> None:
+        """Remove IDs de rastreamento antigos (antes o dicionário crescia sem limite em streams longos)."""
+        stale = [t for t, seen in self._grace_last_seen.items() if self._frame_counter - seen > max_age]
+        for tid in stale:
+            self._grace_last_seen.pop(tid, None)
+            self._worker_grace.pop(tid, None)
+
     # ---------------------------------------------------------- IDetector proxy
     def reset_tracking(self) -> None:
         self.pose.reset_tracking()
         self.smoother.reset()
         self._worker_grace.clear()
+        self._grace_last_seen.clear()
+        self._frame_counter = 0
+
+    @property
+    def model_path(self) -> str:
+        """Usado pelo /health da API (antes inexistente → erro 500 no modo híbrido)."""
+        return f"{getattr(self.pose, 'model_path', 'pose')} + {self.ppe_model_path}"
+
+    @property
+    def is_cabin(self) -> bool:
+        return bool(getattr(self.pose, "is_cabin", False))
+
+    @is_cabin.setter
+    def is_cabin(self, value: bool) -> None:
+        # Repassa o contexto de cabine ao Pose (antes o atributo não existia no híbrido e o
+        # modo cabine/motorista nunca era ativado com o backend padrão)
+        if hasattr(self.pose, "is_cabin"):
+            self.pose.is_cabin = bool(value)
 
     @property
     def confidence(self) -> float:

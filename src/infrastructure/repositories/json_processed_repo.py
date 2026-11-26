@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import tempfile
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +24,7 @@ class JsonProcessedVideosRepository(IProcessedVideosRepository):
     def __init__(self, db_path: str | Path = "videos_processados.json"):
         self.db_path = Path(db_path)
         self.data: dict[str, Any] = {}
+        self._lock = threading.Lock()
         self._load()
 
     def _load(self) -> None:
@@ -35,12 +39,28 @@ class JsonProcessedVideosRepository(IProcessedVideosRepository):
             self.data = {}
 
     def _save(self) -> None:
+        """Grava de forma atômica (arquivo temporário + replace).
+
+        Antes o JSON era sobrescrito diretamente: se o programa fechasse no meio da gravação o
+        arquivo ficava corrompido, era descartado no próximo carregamento e TODOS os vídeos
+        voltavam a ser reprocessados.
+        """
+        tmp_name = None
         try:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.db_path, "w", encoding="utf-8") as f:
+            fd, tmp_name = tempfile.mkstemp(prefix=".videos_", suffix=".tmp", dir=self.db_path.parent)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_name, self.db_path)
+            tmp_name = None
         except Exception as e:
             logger.error(f"❌ Erro ao salvar banco de vídeos processados: {e}")
+        finally:
+            if tmp_name:
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
 
     def is_processed(self, video_path: Path | str) -> bool:
         """Verifica se o arquivo já foi processado e seu mtime não foi modificado."""
@@ -82,4 +102,5 @@ class JsonProcessedVideosRepository(IProcessedVideosRepository):
             "duration_seconds": round(duration_seconds, 2),
             "violations_count": violations_count,
         }
-        self._save()
+        with self._lock:
+            self._save()

@@ -38,6 +38,9 @@ class LiveView(ctk.CTkFrame):
 
         self.is_streaming: bool = False
         self.stop_requested: bool = False
+        # Evita enfileirar um quadro novo na UI enquanto o anterior ainda não foi desenhado
+        # (antes, com a UI mais lenta que a câmera, a fila do Tk crescia sem parar → atraso e memória)
+        self._ui_update_pending: bool = False
         self._cap: cv2.VideoCapture | None = None
 
         self._build_ui()
@@ -211,6 +214,7 @@ class LiveView(ctk.CTkFrame):
         try:
             cap = cv2.VideoCapture(source)
             if not cap.isOpened():
+                cap.release()
                 self.after(0, self._on_stream_error, f"Não foi possível conectar à câmera: {source}")
                 return
 
@@ -246,7 +250,9 @@ class LiveView(ctk.CTkFrame):
                 annotated = draw_detections(frame, detections)
 
                 viols_count = sum(1 for d in detections if d.is_violation)
-                self.after(0, self._update_stream_ui, annotated, cur_fps, len(detections), viols_count)
+                if not self._ui_update_pending:
+                    self._ui_update_pending = True
+                    self.after(0, self._update_stream_ui, annotated, cur_fps, len(detections), viols_count)
 
             cap.release()
             self._cap = None
@@ -259,6 +265,7 @@ class LiveView(ctk.CTkFrame):
         self.stream_status.configure(text="ONLINE 🟢", fg_color=COLOR_SUCCESS)
 
     def _update_stream_ui(self, frame, fps: float, total_dets: int, viols: int) -> None:
+        self._ui_update_pending = False
         self.video_canvas.update_frame(frame)
         self.fps_label.configure(text=f"{fps:.1f} FPS")
         self.detections_lbl.configure(text=f"Objetos Detectados: {total_dets}")

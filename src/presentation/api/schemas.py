@@ -32,6 +32,7 @@ class FrameAnalysisResponse(BaseModel):
     is_compliant: bool
     total_detections: int
     total_violations: int
+    frame_violations: int = 0  # infrações visíveis neste quadro, ainda sem confirmação temporal
     detections: list[DetectionItem]
     violations: list[ViolationItem]
     summary: dict[str, int]

@@ -42,6 +42,7 @@ class FileAnalysisView(ctk.CTkFrame):
         self.selected_file: str | None = None
         self.is_processing: bool = False
         self.stop_requested: bool = False
+        self._ui_update_pending: bool = False  # descarta quadros de prévia se a UI estiver atrasada
         self._current_metadata: VehicleMetadata | None = None
 
         self._build_ui()
@@ -506,7 +507,11 @@ class FileAnalysisView(ctk.CTkFrame):
                 elapsed = time.time() - t_start
                 current_fps = frames_seen / elapsed if elapsed > 0 else 0
 
-                self.after(0, self._update_player, annotated_frame, progress, frames_seen, total_frames, current_fps)
+                if not self._ui_update_pending:
+                    self._ui_update_pending = True
+                    self.after(
+                        0, self._update_player, annotated_frame, progress, frames_seen, total_frames, current_fps
+                    )
 
             reader.release()
 
@@ -527,6 +532,7 @@ class FileAnalysisView(ctk.CTkFrame):
         total_frames: int,
         current_fps: float,
     ) -> None:
+        self._ui_update_pending = False
         self.video_canvas.update_frame(frame)
         self.progress_bar.set(progress)
         self.fps_badge.configure(text=f"{current_fps:.1f} FPS")

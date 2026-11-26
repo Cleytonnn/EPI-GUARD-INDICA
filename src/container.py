@@ -18,7 +18,9 @@ from src.core.use_cases.process_stream import ProcessLiveStreamUseCase
 from src.core.use_cases.process_video_file import ProcessVideoFileUseCase
 from src.core.use_cases.watch_directory import WatchDirectoryUseCase
 from src.infrastructure.ai.hybrid_detector import HybridEPIDetector
+from src.infrastructure.ai.model_utils import is_git_lfs_pointer, is_usable_weights
 from src.infrastructure.ai.pose_detector import PoseEPIDetector
+from src.infrastructure.ai.thread_safe_detector import ThreadSafeDetector
 from src.infrastructure.ai.yolo_detector import YOLODetector
 from src.infrastructure.notifications.composite_notifier import CompositeNotifier
 from src.infrastructure.notifications.email_notifier import EmailNotifier
@@ -41,10 +43,16 @@ class Container:
 
         # 1. Infraestrutura - Detector de IA (Pose ou YOLO BBox)
         backend = getattr(self.settings.detection, "backend", "pose")
+        if backend not in ("pose", "hybrid", "yolo"):
+            logger.warning("⚠️ detection.backend '%s' inválido — usando 'hybrid'.", backend)
+            backend = "hybrid"
+        self.backend = backend
         if backend in ("pose", "hybrid"):
             model_file = self.settings.detection.model_path
-            # Se o model_path for o padrão legado de bbox, usa o modelo de pose
-            if "best.pt" in model_file:
+            # Se o model_path apontar para um modelo de bbox (não-pose), usa o modelo de pose padrão.
+            # (antes: `"best.pt" in model_file`, que também casava com qualquer nome terminado em best.pt)
+            if "pose" not in Path(model_file).stem.lower():
+                logger.info("ℹ️ model_path '%s' não é um modelo Pose — usando yolov8n-pose.pt.", model_file)
                 model_file = "yolov8n-pose.pt"
             pose_detector = PoseEPIDetector(
                 model_path=model_file,
@@ -53,15 +61,25 @@ class Container:
                 imgsz=self.settings.detection.imgsz,
                 track=self.settings.detection.track,
             )
-            self.detector = self._build_hybrid(pose_detector) if backend == "hybrid" else pose_detector
+            raw_detector = self._build_hybrid(pose_detector) if backend == "hybrid" else pose_detector
         else:
-            self.detector = YOLODetector(
-                model_path=self.settings.detection.model_path,
+            yolo_path = Path(self.settings.detection.model_path)
+            if not yolo_path.is_absolute() and (ROOT_DIR / yolo_path).exists():
+                yolo_path = ROOT_DIR / yolo_path
+            if is_git_lfs_pointer(yolo_path):
+                raise RuntimeError(
+                    f"O modelo '{yolo_path}' é apenas um ponteiro do Git LFS (pesos não baixados). "
+                    "Rode 'git lfs install' e 'git lfs pull' na pasta do projeto."
+                )
+            raw_detector = YOLODetector(
+                model_path=yolo_path,
                 confidence=self.settings.detection.confidence,
                 iou_threshold=self.settings.detection.iou_threshold,
                 imgsz=self.settings.detection.imgsz,
                 track=self.settings.detection.track,
             )
+        # Acesso serializado: API, câmeras HTTP e Desktop compartilham o mesmo detector entre threads
+        self.detector = ThreadSafeDetector(raw_detector)
 
         # 2. Infraestrutura - Armazenamento de Imagens
         self.alert_storage = FileAlertStorage(
@@ -92,12 +110,7 @@ class Container:
         self.video_reader_factory = lambda path: UniversalVideoReader(path)
 
         # 6. Serviços de Domínio
-        self.compliance_service = ComplianceService(
-            required_ppe=self.settings.compliance.required_ppe,
-            violation_classes=self.settings.compliance.violation_classes,
-            min_violation_frames=self.settings.compliance.min_violation_frames,
-            infer_missing_ppe=(backend != "hybrid"),
-        )
+        self.compliance_service = self.create_compliance_service()
 
         # 6.1 Aprendizado Ativo - coleta de frames para revisão e retreino
         al_cfg = self.settings.active_learning
@@ -136,6 +149,7 @@ class Container:
         self.analyze_frame_uc = AnalyzeFrameUseCase(
             detector=self.detector,
             compliance_service=self.compliance_service,
+            compliance_factory=self.create_compliance_service,
         )
 
         self.process_stream_uc = ProcessLiveStreamUseCase(
@@ -146,18 +160,38 @@ class Container:
             training_collector=self.training_collector,
         )
 
+    def create_compliance_service(self) -> ComplianceService:
+        """Cria um ComplianceService novo com as regras do settings (um por câmera/fluxo).
+
+        No modo híbrido o detector já emite ``no_<epi>`` estabilizado; inferir ausência
+        de novo geraria alertas duplicados — por isso ``infer_missing_ppe`` depende do backend.
+        """
+        comp = self.settings.compliance
+        return ComplianceService(
+            required_ppe=comp.required_ppe,
+            violation_classes=comp.violation_classes,
+            min_violation_frames=comp.min_violation_frames,
+            infer_missing_ppe=(self.backend != "hybrid"),
+        )
+
     def _build_hybrid(self, pose_detector: PoseEPIDetector):
         """Cria o detector híbrido; recua para Pose puro se o modelo de EPIs não existir."""
         det = self.settings.detection
         model_path = Path(det.ppe_model_path)
         if not model_path.is_absolute():
             model_path = ROOT_DIR / model_path
-        if not model_path.exists():
+        if not is_usable_weights(model_path):
+            if is_git_lfs_pointer(model_path):
+                reason = "é apenas um ponteiro do Git LFS (rode 'git lfs install' e 'git lfs pull')"
+            else:
+                reason = "não foi encontrado"
             logger.warning(
-                "Modelo de EPIs '%s' não encontrado — usando apenas Pose/heurística. "
-                "Treine com: python scripts/train_tcc.py",
+                "⚠️ Modelo de EPIs '%s' %s — usando apenas Pose/heurística. Treine com: python scripts/train_tcc.py",
                 model_path,
+                reason,
             )
+            # Sem o modelo de EPIs a ausência precisa ser inferida pelo ComplianceService
+            self.backend = "pose"
             return pose_detector
         smoother = PPEStateSmoother(
             alpha=det.smoothing_alpha,

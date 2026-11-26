@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import queue
+import sys
 import threading
 import time
 
@@ -55,7 +56,9 @@ class CameraStream:
                 self._cap.release()
 
             if isinstance(self.source, int):
-                self._cap = cv2.VideoCapture(self.source, cv2.CAP_DSHOW)
+                # CAP_DSHOW só existe no Windows; no Linux/Docker a webcam não abria
+                backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+                self._cap = cv2.VideoCapture(self.source, backend)
             else:
                 self._cap = cv2.VideoCapture(str(self.source), cv2.CAP_FFMPEG)
 
@@ -79,7 +82,9 @@ class CameraStream:
                 self._connect()
                 continue
 
-            ret, frame = self._cap.read()
+            with self._lock:
+                cap = self._cap
+                ret, frame = cap.read() if cap is not None else (False, None)
             if not ret or frame is None:
                 logger.warning("⚠️ Perda de sinal no stream de vídeo.")
                 self._connected = False

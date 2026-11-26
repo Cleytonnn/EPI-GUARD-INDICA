@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
+import re
+import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -21,6 +24,7 @@ import yaml
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 
 from src.config.settings import ROOT_DIR
+from src.core.domain.vehicle_metadata import VehicleMetadata
 from src.core.interfaces.alert_storage import IAlertStorage
 from src.core.interfaces.detector import IDetector
 from src.core.interfaces.notifier import INotifier
@@ -72,6 +76,9 @@ class CameraAPIClient:
         self.max_workers = max_workers
 
         self._running = False
+        self._stop_event = threading.Event()
+        self._stats_lock = threading.Lock()
+        self._compliance_lock = threading.Lock()
         self._sessions: dict[str, requests.Session] = {}
         self._stats = {
             "total_requests": 0,
@@ -102,9 +109,14 @@ class CameraAPIClient:
         logger.info(f"📹 {len(self.cameras)} câmera(s) remota(s) configurada(s) via API")
 
     def _get_compliance_service(self, camera_id: str) -> ComplianceService:
-        if camera_id not in self.compliance_checkers:
-            self.compliance_checkers[camera_id] = self.compliance_factory()
-        return self.compliance_checkers[camera_id]
+        with self._compliance_lock:
+            if camera_id not in self.compliance_checkers:
+                self.compliance_checkers[camera_id] = self.compliance_factory()
+            return self.compliance_checkers[camera_id]
+
+    def _inc(self, key: str, amount: int = 1) -> None:
+        with self._stats_lock:  # várias threads atualizam as estatísticas
+            self._stats[key] += amount
 
     def fetch_snapshot(self, camera_id: str) -> np.ndarray | None:
         """Busca um snapshot de uma câmera via HTTP e decodifica para BGR."""
@@ -121,7 +133,7 @@ class CameraAPIClient:
                 response = session.get(cam.url, timeout=cam.timeout)
 
             response.raise_for_status()
-            self._stats["total_requests"] += 1
+            self._inc("total_requests")
 
             content_type = response.headers.get("Content-Type", "")
 
@@ -160,17 +172,17 @@ class CameraAPIClient:
 
         except requests.exceptions.Timeout:
             logger.warning(f"⏱️ [{camera_id}] Timeout ao buscar snapshot")
-            self._stats["total_errors"] += 1
+            self._inc("total_errors")
         except requests.exceptions.ConnectionError:
             logger.warning(f"🔌 [{camera_id}] Erro de conexão: {cam.url}")
-            self._stats["total_errors"] += 1
+            self._inc("total_errors")
         except requests.exceptions.HTTPError as e:
             code = e.response.status_code if e.response is not None else "?"
             logger.warning(f"❌ [{camera_id}] HTTP {code}: {e}")
-            self._stats["total_errors"] += 1
+            self._inc("total_errors")
         except Exception as e:
             logger.error(f"❌ [{camera_id}] Erro inesperado: {e}")
-            self._stats["total_errors"] += 1
+            self._inc("total_errors")
 
         return None
 
@@ -181,13 +193,21 @@ class CameraAPIClient:
 
         detections = self.detector.detect(frame, skip_frames=1)
         if detections:
-            self._stats["total_detections"] += len(detections)
+            self._inc("total_detections", len(detections))
 
         checker = self._get_compliance_service(camera_id)
-        violations = checker.check(detections)
+        # Metadados com o ID da câmera: evidências ficam em alertas/<camera>/<data>/ e o
+        # rate limit passa a ser por câmera (antes a chave "no_helmet_track_1" colidia entre câmeras)
+        metadata = VehicleMetadata(
+            plate=camera_id,
+            record_date=time.strftime("%Y-%m-%d"),
+            video_name=f"{camera_id}_{time.strftime('%H%M%S')}",
+            video_time_str=time.strftime("%H:%M:%S"),
+        )
+        violations = checker.check(detections, metadata=metadata)
 
         if violations:
-            self._stats["total_violations"] += len(violations)
+            self._inc("total_violations", len(violations))
             annotated = draw_detections(frame, detections)
             for viol in violations:
                 logger.warning(f"🚨 [{camera_id}] {viol.description}")
@@ -200,14 +220,21 @@ class CameraAPIClient:
         logger.info(f"📹 [{camera_id}] Iniciando monitoramento: {cam.name}")
 
         while self._running:
-            self._process_camera(camera_id)
-            time.sleep(cam.interval)
+            try:
+                self._process_camera(camera_id)
+            except Exception as exc:  # uma falha não pode matar a thread da câmera em silêncio
+                logger.error(f"❌ [{camera_id}] Erro no processamento: {exc}", exc_info=True)
+                self._inc("total_errors")
+            # Event.wait permite encerrar na hora, sem esperar o intervalo inteiro
+            if self._stop_event.wait(cam.interval):
+                break
 
         logger.info(f"📹 [{camera_id}] Monitoramento encerrado.")
 
     def start(self) -> None:
         """Inicia o pool de threads para monitorar todas as câmeras habilitadas."""
         self._running = True
+        self._stop_event.clear()
 
         logger.info("=" * 60)
         logger.info("🚀 MONITORAMENTO VIA API DE CÂMERAS INICIADO")
@@ -216,7 +243,10 @@ class CameraAPIClient:
             logger.info(f"   [{cam_id}] {cam.name} - a cada {cam.interval}s")
         logger.info("=" * 60)
 
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+        # Cada câmera ocupa uma thread o tempo todo: o pool precisa ter pelo menos uma por câmera,
+        # senão as excedentes (acima de max_workers) nunca eram monitoradas.
+        workers = max(1, max(self.max_workers, len(self.cameras)))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
             for cam_id in self.cameras:
                 executor.submit(self._camera_loop, cam_id)
 
@@ -232,6 +262,7 @@ class CameraAPIClient:
     def stop(self) -> None:
         """Encerra o monitoramento e fecha sessões HTTP."""
         self._running = False
+        self._stop_event.set()
         for session in self._sessions.values():
             session.close()
 
@@ -246,6 +277,20 @@ class CameraAPIClient:
         logger.info("=" * 60)
 
 
+_ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def _expand_env(value):
+    """Substitui ${VARIAVEL} pelo valor do ambiente/.env (evita senhas em texto puro no YAML)."""
+    if isinstance(value, str):
+        return _ENV_PATTERN.sub(lambda m: os.getenv(m.group(1), ""), value)
+    if isinstance(value, dict):
+        return {k: _expand_env(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_expand_env(v) for v in value]
+    return value
+
+
 def load_cameras_config(config_path: str | Path | None = None) -> list[RemoteCameraConfig]:
     """Carrega a lista de câmeras remotas a partir de config/cameras.yaml."""
     target = Path(config_path) if config_path is not None else ROOT_DIR / "config" / "cameras.yaml"
@@ -253,11 +298,19 @@ def load_cameras_config(config_path: str | Path | None = None) -> list[RemoteCam
         logger.error(f"❌ Arquivo de câmeras não encontrado: {target}")
         return []
 
-    with open(target, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+    try:
+        with open(target, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        logger.error(f"❌ Erro ao ler {target}: {exc}")
+        return []
 
     cameras: list[RemoteCameraConfig] = []
-    for cam_data in data.get("cameras", []):
+    for cam_data in data.get("cameras", []) or []:
+        cam_data = _expand_env(cam_data)
+        if "camera_id" not in cam_data or "url" not in cam_data:
+            logger.error(f"❌ Câmera ignorada (faltam 'camera_id' ou 'url'): {cam_data}")
+            continue
         cameras.append(
             RemoteCameraConfig(
                 camera_id=cam_data["camera_id"],

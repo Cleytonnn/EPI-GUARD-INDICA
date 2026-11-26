@@ -6,15 +6,53 @@ provendo validação e acesso tipado em todas as camadas.
 
 from __future__ import annotations
 
+import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
+from typing import Any
 
 import yaml
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 # Diretório raiz do projeto
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+
+
+def resolve_path(value: str | Path) -> Path:
+    """Resolve caminhos relativos a partir da raiz do projeto (e não do diretório de execução)."""
+    path = Path(value)
+    return path if path.is_absolute() else ROOT_DIR / path
+
+
+def _build(cls: type, data: dict[str, Any] | None, section: str) -> Any:
+    """Instancia uma dataclass a partir de um dicionário, avisando sobre chaves desconhecidas.
+
+    Usa ``dataclasses.fields`` em vez de ``hasattr``: campos com ``default_factory``
+    (listas) NÃO existem como atributo de classe, e eram descartados silenciosamente.
+    """
+    data = data or {}
+    if not isinstance(data, dict):
+        logger.warning("⚠️ Seção '%s' do settings.yaml não é um mapeamento — usando padrões.", section)
+        return cls()
+    names = {f.name for f in fields(cls)}
+    unknown = sorted(set(data) - names)
+    if unknown:
+        logger.warning("⚠️ Chaves desconhecidas em '%s' (ignoradas): %s", section, ", ".join(unknown))
+    return cls(**{k: v for k, v in data.items() if k in names})
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("⚠️ Variável %s inválida (%r) — usando %s.", name, raw, default)
+        return default
 
 
 @dataclass
@@ -116,9 +154,11 @@ class ActiveLearningConfig:
 class ApiConfig:
     """Configurações da API REST."""
 
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"  # Padrão seguro: só a máquina local. Use 0.0.0.0 explicitamente (ex.: Docker).
     port: int = 8000
-    cors_origins: list[str] = field(default_factory=lambda: ["*"])
+    cors_origins: list[str] = field(default_factory=lambda: ["http://localhost", "http://127.0.0.1"])
+    max_upload_mb: float = 10.0  # Limite de tamanho de imagem enviada para a API
+    api_key: str | None = None  # Lido de API_KEY no .env; quando definido, exigido no header X-API-Key
 
 
 @dataclass
@@ -142,24 +182,20 @@ class AppSettings:
         if config_path is None:
             config_path = ROOT_DIR / "config" / "settings.yaml"
 
-        raw_data = {}
+        raw_data: dict[str, Any] = {}
         path_obj = Path(config_path)
         if path_obj.exists():
             try:
                 with open(path_obj, encoding="utf-8") as f:
                     raw_data = yaml.safe_load(f) or {}
-            except Exception:
+            except (OSError, yaml.YAMLError) as exc:
+                # Antes o erro era engolido em silêncio e o sistema rodava com padrões diferentes do esperado
+                logger.error("❌ Erro ao ler %s — usando configurações padrão: %s", path_obj, exc)
                 raw_data = {}
+        else:
+            logger.warning("⚠️ Arquivo de configuração não encontrado: %s — usando padrões.", path_obj)
 
-        # Mapeamento e instanciação tipada
-        cam_data = raw_data.get("camera", {})
-        det_data = raw_data.get("detection", {})
-        comp_data = raw_data.get("compliance", {})
-        alert_data = raw_data.get("alerts", {})
-        disp_data = raw_data.get("display", {})
-        batch_data = raw_data.get("video_batch", {})
-        api_data = raw_data.get("api", {})
-        al_data = raw_data.get("active_learning", {}) or {}
+        alert_data = raw_data.get("alerts", {}) or {}
 
         alerts_cfg = AlertConfig(
             save_images=alert_data.get("save_images", True),
@@ -171,18 +207,28 @@ class AppSettings:
             email_password=os.getenv("EMAIL_PASSWORD"),
             email_receiver=os.getenv("EMAIL_RECEIVER"),
             smtp_server=os.getenv("SMTP_SERVER", "smtp.gmail.com"),
-            smtp_port=int(os.getenv("SMTP_PORT", "587")),
+            smtp_port=_env_int("SMTP_PORT", 587),
         )
 
-        return cls(
-            camera=CameraConfig(**{k: v for k, v in cam_data.items() if hasattr(CameraConfig, k)}),
-            detection=DetectionConfig(**{k: v for k, v in det_data.items() if hasattr(DetectionConfig, k)}),
-            compliance=ComplianceConfig(**{k: v for k, v in comp_data.items() if hasattr(ComplianceConfig, k)}),
+        api_cfg = _build(ApiConfig, raw_data.get("api"), "api")
+        api_cfg.api_key = os.getenv("API_KEY") or api_cfg.api_key
+
+        settings = cls(
+            camera=_build(CameraConfig, raw_data.get("camera"), "camera"),
+            detection=_build(DetectionConfig, raw_data.get("detection"), "detection"),
+            compliance=_build(ComplianceConfig, raw_data.get("compliance"), "compliance"),
             alerts=alerts_cfg,
-            display=DisplayConfig(**{k: v for k, v in disp_data.items() if hasattr(DisplayConfig, k)}),
-            video_batch=VideoBatchConfig(**{k: v for k, v in batch_data.items() if hasattr(VideoBatchConfig, k)}),
-            api=ApiConfig(**{k: v for k, v in api_data.items() if hasattr(ApiConfig, k)}),
-            active_learning=ActiveLearningConfig(
-                **{k: v for k, v in al_data.items() if hasattr(ActiveLearningConfig, k)}
-            ),
+            display=_build(DisplayConfig, raw_data.get("display"), "display"),
+            video_batch=_build(VideoBatchConfig, raw_data.get("video_batch"), "video_batch"),
+            api=api_cfg,
+            active_learning=_build(ActiveLearningConfig, raw_data.get("active_learning"), "active_learning"),
         )
+        settings._resolve_paths()
+        return settings
+
+    def _resolve_paths(self) -> None:
+        """Ancora caminhos de saída na raiz do projeto, independentemente do diretório de execução."""
+        self.alerts.save_dir = str(resolve_path(self.alerts.save_dir))
+        self.video_batch.report_csv = str(resolve_path(self.video_batch.report_csv))
+        self.video_batch.processed_db = str(resolve_path(self.video_batch.processed_db))
+        self.active_learning.output_dir = str(resolve_path(self.active_learning.output_dir))

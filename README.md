@@ -5,7 +5,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x%20%7C%20CUDA%2012-EE4C2C.svg)](https://pytorch.org/)
 [![YOLO](https://img.shields.io/badge/YOLO-Pose%20%26%20v11%20Ultralytics-00FFFF.svg)](https://docs.ultralytics.com/)
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2F%20Hexagonal-brightgreen.svg)]()
-[![Tests](https://img.shields.io/badge/Tests-55%20Passed-success.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-70%20Passed-success.svg)]()
 [![Author](https://img.shields.io/badge/CRIADO%20POR-CLEYTON%20BAUMGRATZ-orange.svg)]()
 
 > **CRIADO POR CLEYTON BAUMGRATZ**
@@ -161,7 +161,8 @@ Dê dois cliques em **`iniciar.bat`** ou execute:
 ### 3. Iniciar o Servidor de API REST (FastAPI)
 Dê dois cliques em **`iniciar_api.bat`** ou execute:
 ```powershell
-.\.venv\Scripts\python.exe -m src.api --host 0.0.0.0 --port 8000
+.\.venv\Scripts\python.exe -m src.api --host 127.0.0.1 --port 8000
+# Para liberar na rede (0.0.0.0), defina antes API_KEY no .env: as rotas passam a exigir o header X-API-Key
 ```
 - **Swagger UI:** `http://localhost:8000/docs`
 - **Healthcheck:** `http://localhost:8000/health`

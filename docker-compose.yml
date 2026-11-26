@@ -11,8 +11,11 @@ services:
       - ./models:/app/models
       - ./alertas:/app/alertas
       - ./gravacoes:/app/gravacoes
-      - ./config:/app/config
-      - ./.env:/app/.env
+      - ./config:/app/config:ro
+    # Antes: "./.env:/app/.env" — se o .env não existisse o Docker criava uma PASTA .env e a app quebrava.
+    env_file:
+      - path: .env
+        required: false
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility

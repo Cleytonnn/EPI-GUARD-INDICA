@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -12,12 +13,23 @@ from src.core.interfaces.report_repo import IViolationReportRepository
 
 logger = logging.getLogger(__name__)
 
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _safe_cell(value: object) -> object:
+    """Neutraliza "CSV/Formula injection": nomes de pasta/arquivo iniciados por =,+,-,@ seriam
+    executados como fórmula ao abrir o relatório no Excel."""
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
 
 class CsvViolationReportRepository(IViolationReportRepository):
     """Implementa IViolationReportRepository gravando em arquivo CSV com delimitador ';'."""
 
     def __init__(self, csv_path: str | Path = "relatorio_infracoes.csv"):
         self.csv_path = Path(csv_path)
+        self._lock = threading.Lock()
         self._ensure_header()
 
     def _ensure_header(self) -> None:
@@ -56,23 +68,22 @@ class CsvViolationReportRepository(IViolationReportRepository):
             video_time_str = meta.video_time_str if meta else "00:00:00"
             video_second = f"{meta.video_second:.1f}" if meta else "0.0"
 
-            with open(self.csv_path, "a", newline="", encoding="utf-8-sig") as f:
-                writer = csv.writer(f, delimiter=";")
-                writer.writerow(
-                    [
-                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        plate,
-                        rec_date,
-                        video_name,
-                        video_time_str,
-                        video_second,
-                        violation.violation_type,
-                        violation.description,
-                        f"{violation.confidence:.1%}",
-                        violation.track_id if violation.track_id is not None else "N/A",
-                        violation.consecutive_frames,
-                        image_path or "",
-                    ]
-                )
+            self._ensure_header()  # o arquivo pode ter sido apagado/movido com o sistema rodando
+            row = [
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                plate,
+                rec_date,
+                video_name,
+                video_time_str,
+                video_second,
+                violation.violation_type,
+                violation.description,
+                f"{violation.confidence:.1%}",
+                violation.track_id if violation.track_id is not None else "N/A",
+                violation.consecutive_frames,
+                image_path or "",
+            ]
+            with self._lock, open(self.csv_path, "a", newline="", encoding="utf-8-sig") as f:
+                csv.writer(f, delimiter=";").writerow([_safe_cell(v) for v in row])
         except Exception as e:
             logger.error(f"❌ Erro ao salvar linha no CSV de infrações: {e}")

@@ -1,13 +1,24 @@
-"""Testes unitários para a aplicação Desktop (CustomTkinter)."""
+"""Testes unitários para a aplicação Desktop (CustomTkinter).
 
-from src.container import Container
-from src.presentation.desktop.app import PPEComplianceDesktopApp
+Ignorados automaticamente quando o Python não tem Tkinter ou não há display (CI headless).
+"""
+
+import pytest
+
+tkinter = pytest.importorskip("tkinter", reason="Tkinter indisponível neste Python")
+pytest.importorskip("customtkinter")
+
+from src.container import Container  # noqa: E402
+from src.presentation.desktop.app import PPEComplianceDesktopApp  # noqa: E402
 
 
 def test_desktop_app_initialization_and_view_switching():
     """Testa se a aplicação desktop inicializa e troca de views sem erros."""
     container = Container()
-    app = PPEComplianceDesktopApp(container=container)
+    try:
+        app = PPEComplianceDesktopApp(container=container)
+    except tkinter.TclError as exc:
+        pytest.skip(f"Sem display gráfico disponível: {exc}")
     app.withdraw()  # Não exibir janela durante testes automatizados
     app.update()
 
